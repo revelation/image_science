@@ -98,6 +98,19 @@ class TestImageScience < MiniTest::Unit::TestCase
     end
   end
 
+  def test_buffer
+    buffer = nil
+    ImageScience.with_image @path do |img|
+      img.resize(25, 25) do |thumb|
+        buffer = thumb.buffer('.jpg')
+        File.open('/tmp/foo.jpg', 'w') { |f|
+          f.write buffer
+        }
+        assert buffer
+      end
+    end
+  end
+
   def test_resize_floats
     ImageScience.with_image @path do |img|
       img.resize(25.2, 25.7) do |thumb|

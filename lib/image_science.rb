@@ -11,7 +11,7 @@ require 'inline'
 # http://seattlerb.rubyforge.org/ImageScience.html
 
 class ImageScience
-  VERSION = '1.2.1'
+  VERSION = '1.2.2'
 
   ##
   # The top-level image loader opens +path+ and then yields the image.
@@ -47,6 +47,12 @@ class ImageScience
   # convert the file type to the appropriate format.
 
   def save(path); end
+
+  ##
+  # Returns the image in a buffer (String). Changing the file
+  # extension converts the file type to the appropriate format.
+
+  def buffer(extension); end
 
   ##
   # Resizes the image to +width+ and +height+ using a cubic-bspline
@@ -285,6 +291,50 @@ class ImageScience
           if (unload) FreeImage_Unload(bitmap);
 
           return result ? Qtrue : Qfalse;
+        }
+        rb_raise(rb_eTypeError, "Unknown file format");
+      }
+    END
+
+    builder.c <<-"END"
+      VALUE buffer(char * extension) {
+        VALUE str;
+        int flags;
+        FIBITMAP *bitmap;
+        FREE_IMAGE_FORMAT fif = FreeImage_GetFIFFromFilename(extension);
+        FIMEMORY *mem = NULL;
+        long file_size;
+        BYTE *mem_buffer = NULL; 
+        DWORD size_in_bytes = 0; 
+
+        if (fif == FIF_UNKNOWN) fif = FIX2INT(rb_iv_get(self, "@file_type"));
+        if ((fif != FIF_UNKNOWN) && FreeImage_FIFSupportsWriting(fif)) {
+          GET_BITMAP(bitmap);
+          flags = fif == FIF_JPEG ? JPEG_QUALITYSUPERB : 0;
+          BOOL result = 0, unload = 0;
+
+          if (fif == FIF_PNG) FreeImage_DestroyICCProfile(bitmap);
+          if (fif == FIF_JPEG && FreeImage_GetBPP(bitmap) != 24)
+            bitmap = FreeImage_ConvertTo24Bits(bitmap), unload = 1; // sue me
+
+          mem = FreeImage_OpenMemory(0,0);
+          result = FreeImage_SaveToMemory(fif, bitmap, mem, flags);
+
+          // get the buffer from the memory stream 
+          FreeImage_AcquireMemory(mem, &mem_buffer, &size_in_bytes);
+
+          // convert to ruby string
+          str = rb_str_new(mem_buffer, size_in_bytes);
+
+          // clean up
+          if (unload) FreeImage_Unload(bitmap);
+          FreeImage_CloseMemory(mem); 
+
+          if (result) {
+            return str;
+          } else {
+            return Qfalse;
+          }
         }
         rb_raise(rb_eTypeError, "Unknown file format");
       }
