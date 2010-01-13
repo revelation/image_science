@@ -43,6 +43,11 @@ class ImageScience
   def height; end
 
   ##
+  # Returns an array representing the color of the given pixel (blue,green,red)
+
+  def get_pixel_color(x, y); end
+
+  ##
   # Saves the image out to +path+. Changing the file extension will
   # convert the file type to the appropriate format.
 
@@ -247,6 +252,24 @@ class ImageScience
         GET_BITMAP(bitmap);
 
         return FreeImage_GetWidth(bitmap);
+      }
+    END
+
+    builder.c <<-"END"
+      VALUE get_pixel_color(unsigned x, unsigned y) {
+        FIBITMAP *bitmap;
+        RGBQUAD rgb;
+        GET_BITMAP(bitmap);
+        int success;
+        VALUE out_ary = rb_ary_new2(3);
+
+        success = FreeImage_GetPixelColor(bitmap, x, y, &rgb);
+        if(success) {
+          rb_ary_store(out_ary, 0, INT2FIX(rgb.rgbRed));
+          rb_ary_store(out_ary, 1, INT2FIX(rgb.rgbGreen));
+          rb_ary_store(out_ary, 2, INT2FIX(rgb.rgbBlue));
+        }
+        return out_ary;
       }
     END
 
