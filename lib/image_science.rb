@@ -2,6 +2,7 @@
 
 require 'rubygems'
 require 'inline'
+require 'rbconfig'
 
 ##
 # Provides a clean and simple API to generate thumbnails using
@@ -98,9 +99,9 @@ class ImageScience
       builder.add_link_flags "-L/opt/local/lib"
     end
 
+    builder.add_link_flags "#{Config::CONFIG['LDFLAGS']}"
     builder.add_link_flags "-lfreeimage"
     unless RUBY_PLATFORM =~ /mswin/
-      builder.add_link_flags "-lfreeimage"
       # TODO: detect PPC
       builder.add_link_flags "-lstdc++" # only needed on PPC for some reason
     else
