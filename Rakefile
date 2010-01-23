@@ -25,7 +25,9 @@ Hoe.spec 'image_science' do
   clean_globs << 'blah*png' << 'images/*_thumb.*'
 
   email_to << 'jim@hotelicopter.com'
-  prefix << 'g1nn13-'
+
+  # this can be set in ~/.hoerc or overridden here
+  prefix < 'g1nn13-'
 end
 
 # vim: syntax=Ruby
