@@ -10,7 +10,7 @@ require 'hoe'
 
 Hoe.plugin :git
 Hoe.plugin :inline
-Hoe.plugin :telicopter   # includes email and hotelicopter_gemcutter
+Hoe.plugin :telicopter
 
 Hoe.plugins.delete :rubyforge
 Hoe.plugins.delete :gemcutter
