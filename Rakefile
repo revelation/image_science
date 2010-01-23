@@ -25,7 +25,7 @@ Hoe.spec 'image_science' do
   clean_globs << 'blah*png' << 'images/*_thumb.*'
 
   email_to << 'jim@hotelicopter.com'
-#  prefixer_prefix << 'g1nn13'
+  prefix << 'g1nn13-'
 end
 
 # vim: syntax=Ruby
