@@ -22,7 +22,7 @@ Hoe.spec 'image_science' do
   extra_dev_deps << %w(hoe-doofus >=1.0.0)
   extra_dev_deps << %w(hoe-git >=1.3.0)
 
-  self.name = "#{Hoe::Hotelicutter.PREFIX}#{self.name}"
+  self.name = Hoe::Hotelicutter.add_prefix(self.name)
   
   clean_globs << 'blah*png' << 'images/*_thumb.*'
 end
