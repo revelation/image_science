@@ -21,10 +21,11 @@ Hoe.spec 'image_science' do
   extra_deps << %w(gemcutter >=0.3.0)
   extra_dev_deps << %w(hoe-doofus >=1.0.0)
   extra_dev_deps << %w(hoe-git >=1.3.0)
-
-  self.name = Hoe::Hotelicutter.add_prefix(self.name)
   
   clean_globs << 'blah*png' << 'images/*_thumb.*'
+
+  email_to << 'jim@hotelicopter.com'
+#  prefixer_prefix << 'g1nn13'
 end
 
 # vim: syntax=Ruby
