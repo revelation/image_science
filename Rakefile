@@ -8,10 +8,10 @@
 require 'rubygems'
 require 'hoe'
 
-Hoe.plugin :doofus, :git, :inline, :telicopter
-
 Hoe.plugins.delete :rubyforge
 Hoe.plugins.delete :gemcutter
+
+Hoe.plugin :doofus, :git, :inline, :telicopter
 
 Hoe.spec 'image_science' do
 
