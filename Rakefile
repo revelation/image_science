@@ -8,9 +8,7 @@
 require 'rubygems'
 require 'hoe'
 
-Hoe.plugin :git
-Hoe.plugin :inline
-Hoe.plugin :telicopter
+Hoe.plugin :doofus, :git, :inline, :telicopter
 
 Hoe.plugins.delete :rubyforge
 Hoe.plugins.delete :gemcutter
@@ -19,6 +17,13 @@ Hoe.spec 'image_science' do
 
   developer "jim nist", "jim@hotelicopter.com"
 
+  extra_deps << %w(hoe >=2.5.0)
+  extra_deps << %w(gemcutter >=0.3.0)
+  extra_dev_deps << %w(hoe-doofus >=1.0.0)
+  extra_dev_deps << %w(hoe-git >=1.3.0)
+
+  self.name = "#{Hoe::Telicopter.PREFIX}#{self.name}"
+  
   clean_globs << 'blah*png' << 'images/*_thumb.*'
 end
 
