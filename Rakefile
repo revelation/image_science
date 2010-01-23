@@ -27,7 +27,9 @@ Hoe.spec 'image_science' do
   email_to << 'jim@hotelicopter.com'
 
   # this can be set in ~/.hoerc or overridden here
-#  prefix = 'g1nn13'
+  prefix = 'g1nn13-'
+
+#  self.name = prefix
 end
 
 # vim: syntax=Ruby
