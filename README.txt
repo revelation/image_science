@@ -3,6 +3,13 @@
 * http://seattlerb.rubyforge.org/ImageScience.html
 * http://rubyforge.org/projects/seattlerb
 
+== g1nn13 fork changes
+
+* added buffer() method to get image buffer for writing (in our case to Amazon S3)
+* added
+* added .gitignore to ignore netbeans project directory
+* bumped versions so our code could config.gem our fork
+
 == DESCRIPTION:
 
 ImageScience is a clean and happy Ruby library that generates
