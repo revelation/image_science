@@ -13,7 +13,7 @@ Hoe.plugins.delete :gemcutter
 
 Hoe.plugin :doofus, :git, :inline, :telicopter
 
-Hoe.spec 'image_science' do
+Hoe.spec 'g1nn13-image_science' do
 
   developer "jim nist", "jim@hotelicopter.com"
 
@@ -26,10 +26,12 @@ Hoe.spec 'image_science' do
 
   email_to << 'jim@hotelicopter.com'
 
-  # this can be set in ~/.hoerc or overridden here
-  self.prefix = 'g1nn13-'
+  # this can be set in ~/.hoerc or overridden here. 
+#  self.prefix = 'g1nn13'
 
-#  self.name = prefix
+  # set the name as that is how the prefixed and forked gems
+  # are allowed on gemcutter
+#  self.name = "#{self.prefix}#{self.name}"
 end
 
 # vim: syntax=Ruby
