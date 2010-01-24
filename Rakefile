@@ -1,15 +1,13 @@
 # -*- ruby -*-
 
 ##
-# we are using the hotelicopter_gemcutter hoe plugin to publish to gemcutter
-# so we want to make sure we disable rubyforge and the regular gemcutter
+# we are using the Hoe::Telicopter hoe plugin to add some email functionality
 #
 
 require 'rubygems'
 require 'hoe'
 
 Hoe.plugins.delete :rubyforge
-Hoe.plugins.delete :gemcutter
 
 Hoe.plugin :doofus, :git, :inline, :telicopter
 
@@ -24,14 +22,8 @@ Hoe.spec 'g1nn13-image_science' do
   
   clean_globs << 'blah*png' << 'images/*_thumb.*'
 
-  email_to << 'jim@hotelicopter.com'
+#  email_to << 'cthulu@hotelicopter.com'
 
-  # this can be set in ~/.hoerc or overridden here. 
-#  self.prefix = 'g1nn13'
-
-  # set the name as that is how the prefixed and forked gems
-  # are allowed on gemcutter
-#  self.name = "#{self.prefix}#{self.name}"
 end
 
 # vim: syntax=Ruby
