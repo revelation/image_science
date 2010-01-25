@@ -306,7 +306,6 @@ class ImageScience
         VALUE str;
         int flags;
         FIBITMAP *bitmap;
-<<<<<<< HEAD:lib/image_science.rb
         FIMEMORY *mem = NULL;
         long file_size;
         BYTE *mem_buffer = NULL; 
@@ -320,30 +319,12 @@ class ImageScience
         if ((fif != FIF_UNKNOWN) && FreeImage_FIFSupportsWriting(fif)) {
           GET_BITMAP(bitmap);
           flags = (fif == FIF_JPEG ? JPEG_QUALITYSUPERB : 0);
-=======
-        FREE_IMAGE_FORMAT fif = FreeImage_GetFIFFromFilename(extension);
-        FIMEMORY *mem = NULL;
-        long file_size;
-        BYTE *mem_buffer = NULL; 
-        DWORD size_in_bytes = 0; 
-
-        if (fif == FIF_UNKNOWN) fif = FIX2INT(rb_iv_get(self, "@file_type"));
-        if ((fif != FIF_UNKNOWN) && FreeImage_FIFSupportsWriting(fif)) {
-          GET_BITMAP(bitmap);
-          flags = fif == FIF_JPEG ? JPEG_QUALITYSUPERB : 0;
->>>>>>> 82c4446fc3ddc3121f6e9d36af299b5109aa7eed:lib/image_science.rb
           BOOL result = 0, unload = 0;
-
-          if (fif == FIF_PNG) FreeImage_DestroyICCProfile(bitmap);
-          if (fif == FIF_JPEG && FreeImage_GetBPP(bitmap) != 24)
-<<<<<<< HEAD:lib/image_science.rb
-            bitmap = FreeImage_ConvertTo24Bits(bitmap), unload = 1;
+          FREE_IMAGE_FORMAT fif = FreeImage_GetFIFFromFilename(extension);
 
           // create a memory stream and save to it
-=======
-            bitmap = FreeImage_ConvertTo24Bits(bitmap), unload = 1; // sue me
-
->>>>>>> 82c4446fc3ddc3121f6e9d36af299b5109aa7eed:lib/image_science.rb
+          bitmap = FreeImage_ConvertTo24Bits(bitmap);
+          unload = 1;
           mem = FreeImage_OpenMemory(0,0);
           result = FreeImage_SaveToMemory(fif, bitmap, mem, flags);
 
@@ -351,13 +332,12 @@ class ImageScience
           FreeImage_AcquireMemory(mem, &mem_buffer, &size_in_bytes);
 
           // convert to ruby string
-          str = rb_str_new(mem_buffer, size_in_bytes);
+          str = rb_str_new((char *) mem_buffer, size_in_bytes);
 
           // clean up
           if (unload) FreeImage_Unload(bitmap);
           FreeImage_CloseMemory(mem); 
 
-<<<<<<< HEAD:lib/image_science.rb
           // yield the string, or return it
           if (rb_block_given_p()) {
             if (result && str) {
@@ -377,15 +357,6 @@ class ImageScience
                  "Unknown file format: %s",
                  extension);
         rb_raise(rb_eTypeError, message);
-=======
-          if (result) {
-            return str;
-          } else {
-            return Qfalse;
-          }
-        }
-        rb_raise(rb_eTypeError, "Unknown file format");
->>>>>>> 82c4446fc3ddc3121f6e9d36af299b5109aa7eed:lib/image_science.rb
       }
     END
   end

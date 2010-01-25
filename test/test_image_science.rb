@@ -98,7 +98,6 @@ class TestImageScience < MiniTest::Unit::TestCase
     end
   end
 
-<<<<<<< HEAD:test/test_image_science.rb
   def test_buffer_return
     ImageScience.with_image @path do |img|
       img.resize(25, 25) do |thumb|
@@ -113,17 +112,6 @@ class TestImageScience < MiniTest::Unit::TestCase
         thumb.buffer('.jpg') do |buffer|
           assert buffer
         end
-=======
-  def test_buffer
-    buffer = nil
-    ImageScience.with_image @path do |img|
-      img.resize(25, 25) do |thumb|
-        buffer = thumb.buffer('.jpg')
-        File.open('/tmp/foo.jpg', 'w') { |f|
-          f.write buffer
-        }
-        assert buffer
->>>>>>> 82c4446fc3ddc3121f6e9d36af299b5109aa7eed:test/test_image_science.rb
       end
     end
   end
