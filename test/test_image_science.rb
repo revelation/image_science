@@ -175,4 +175,77 @@ class TestImageScience < MiniTest::Unit::TestCase
 
     refute File.exists?(@tmppath)
   end
+
+  def test_fit_within_smaller
+    ImageScience.with_image @path do |img|
+      img.fit_within(51, 100) do |thumb|
+        assert thumb.save(@tmppath)
+      end
+    end
+
+    assert File.exists?(@tmppath)
+
+    ImageScience.with_image @tmppath do |img|
+      assert_kind_of ImageScience, img
+      assert_equal 50, img.height
+      assert_equal 50, img.width
+    end
+  end
+
+  def test_fit_within_shrinking_x
+    max_x = 44
+    max_y = 111
+
+    ImageScience.with_image @path do |img|
+      img.fit_within(max_x, max_y) do |thumb|
+        assert thumb.save(@tmppath)
+      end
+    end
+
+    assert File.exists?(@tmppath)
+
+    ImageScience.with_image @tmppath do |img|
+      assert_kind_of ImageScience, img
+      assert img.height <= 50
+      assert img.width <= max_x
+    end
+  end
+
+  def test_fit_within_shrinking_y
+    max_x = 100
+    max_y = 40
+
+    ImageScience.with_image @path do |img|
+      img.fit_within(max_x, max_y) do |thumb|
+        assert thumb.save(@tmppath)
+      end
+    end
+
+    assert File.exists?(@tmppath)
+
+    ImageScience.with_image @tmppath do |img|
+      assert_kind_of ImageScience, img
+      assert img.height <= max_y
+      assert img.width <= 50
+    end
+  end
+
+  def test_fit_within_shrinking_both
+    max_x = 33
+    max_y = 44
+
+    ImageScience.with_image @path do |img|
+      img.fit_within(max_x, max_y) do |thumb|
+        assert thumb.save(@tmppath)
+      end
+    end
+
+    assert File.exists?(@tmppath)
+
+    ImageScience.with_image @tmppath do |img|
+      assert_kind_of ImageScience, img
+      assert img.height <= max_y
+      assert img.width <= max_x
+    end
+  end
 end

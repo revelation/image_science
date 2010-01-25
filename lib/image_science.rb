@@ -52,7 +52,8 @@ class ImageScience
   # Returns the image in a buffer (String). Changing the file
   # extension converts the file type to the appropriate format.
 
-  def buffer(extension); end
+  def buffer(extension) # :yields: image
+  end
 
   ##
   # Resizes the image to +width+ and +height+ using a cubic-bspline
@@ -93,10 +94,31 @@ class ImageScience
     end
   end
 
-#  def fit_within(size) # :yields: image
-#    w, h = width, height
-#
-#  end
+  ##
+  # resize the image to fit within the max_w and max_h passed in without
+  # changing the aspect ratio of the original image
+
+  def fit_within(max_w, max_h) # :yields: image
+    w, h = width, height
+
+    if w > max_w or h > max_h
+
+      w_ratio = max_w.quo(w)
+      h_ratio = max_h.quo(h)
+
+      if (w_ratio < h_ratio)
+        h = (h * w_ratio).to_i
+        w = (w * w_ratio).to_i
+      else
+        h = (h * h_ratio).to_i
+        w = (w * h_ratio).to_i
+      end
+    end
+
+    resize(w, h) do img
+      yield img
+    end
+  end
 
   inline do |builder|
     if test ?d, "/opt/local" then
