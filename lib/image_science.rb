@@ -11,7 +11,7 @@ require 'inline'
 # http://seattlerb.rubyforge.org/ImageScience.html
 
 class ImageScience
-  VERSION = '1.2.3'
+  VERSION = '1.2.4'
 
   ##
   # The top-level image loader opens +path+ and then yields the image.
@@ -92,6 +92,11 @@ class ImageScience
       end
     end
   end
+
+#  def fit_within(size) # :yields: image
+#    w, h = width, height
+#
+#  end
 
   inline do |builder|
     if test ?d, "/opt/local" then

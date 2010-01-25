@@ -1,11 +1,15 @@
+=== 1.2.4 / 2010-01-24
+
+* 1 minor enhancements
+
+  * added fit_within() method to resize an image to fit within a height and
+    width without changing the aspect ratio
 
 === 1.2.3 / 2010-01-22
 
-* 2 minor enhancements
+* 1 minor enhancements
 
   * switched to gemcutter
-  * added fit_within() method to resize an image to fit within a height and
-    width without changing the aspect ratio
 
 === 1.2.2 / 2010-01-01
 

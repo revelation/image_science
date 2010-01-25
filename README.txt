@@ -1,16 +1,16 @@
 = ImageScience
 
+* http://github.com/g1nn13/image_science
 * http://seattlerb.rubyforge.org/ImageScience.html
 * http://rubyforge.org/projects/seattlerb
 
-== g1nn13 fork changes
-
-* added buffer() method to get image buffer for writing (in our case to Amazon S3)
-* added
-* added .gitignore to ignore netbeans project directory
-* bumped versions so our code could config.gem our fork
-
 == DESCRIPTION:
+
+g1nn13 fork changes:
+
+* added buffer() method to get image buffer for writing (to Amazon S3)
+* added fit_within() method to resize an image to fit within a specified
+  height and width without changing the image's aspect ratio
 
 ImageScience is a clean and happy Ruby library that generates
 thumbnails -- and kicks the living crap out of RMagick. Oh, and it
@@ -23,6 +23,7 @@ For more information including build steps, see http://seattlerb.rubyforge.org/
 * Glorious graphics manipulation magi... errr, SCIENCE! in less than 200 LoC!
 * Supports square and proportional thumbnails, as well as arbitrary resizes.
 * Pretty much any graphics format you could want. No really.
+* see g1nn13 fork changes above
 
 == SYNOPSYS:
 
@@ -44,13 +45,14 @@ For more information including build steps, see http://seattlerb.rubyforge.org/
 == INSTALL:
 
 * Download and install FreeImage. See notes at url above.
-* sudo gem install -y image_science
+* sudo gem install -y g1nn13-image_science
 * see http://seattlerb.rubyforge.org/ImageScience.html for more info.
 
 == LICENSE:
 
 (The MIT License)
 
+Copyright (c) 2010 colin steele & jim nist, hotelicopter.com
 Copyright (c) 2006-2009 Ryan Davis, Seattle.rb
 
 Permission is hereby granted, free of charge, to any person obtaining

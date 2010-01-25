@@ -1,7 +1,7 @@
 # -*- ruby -*-
 
 ##
-# we are using the Hoe::Telicopter hoe plugin to add some email functionality
+# using the telicopter hoe plugin to add some email functionality
 #
 
 require 'rubygems'
@@ -19,6 +19,7 @@ Hoe.spec 'g1nn13-image_science' do
   extra_deps << %w(gemcutter >=0.3.0)
   extra_dev_deps << %w(hoe-doofus >=1.0.0)
   extra_dev_deps << %w(hoe-git >=1.3.0)
+  extra_dev_deps << %w(hoe-telicopter >=1.0.0)
   
   clean_globs << 'blah*png' << 'images/*_thumb.*'
 
