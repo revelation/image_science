@@ -1,9 +1,10 @@
-=== 1.2.4 / 2010-01-24
+=== 1.2.4 / 2010-01-26
 
-* 1 minor enhancements
+* 1 minor enhancements, one little mod
 
   * added fit_within() method to resize an image to fit within a height and
     width without changing the aspect ratio
+  * modified the tests to work with Ruby 1.8.7 which we are using
 
 === 1.2.3 / 2010-01-22
 

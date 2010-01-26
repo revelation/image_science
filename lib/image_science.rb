@@ -101,22 +101,22 @@ class ImageScience
   def fit_within(max_w, max_h) # :yields: image
     w, h = width, height
 
-    if w > max_w or h > max_h
+    if w > max_w.to_i or h > max_h.to_i
 
       w_ratio = max_w.quo(w)
       h_ratio = max_h.quo(h)
 
       if (w_ratio < h_ratio)
-        h = (h * w_ratio).to_i
-        w = (w * w_ratio).to_i
+        h = (h * w_ratio)
+        w = (w * w_ratio)
       else
-        h = (h * h_ratio).to_i
-        w = (w * h_ratio).to_i
+        h = (h * h_ratio)
+        w = (w * h_ratio)
       end
     end
 
-    resize(w, h) do img
-      yield img
+    self.resize(w.to_i, h.to_i) do |image|
+      yield image
     end
   end
 

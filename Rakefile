@@ -20,6 +20,7 @@ Hoe.spec 'g1nn13-image_science' do
   extra_dev_deps << %w(hoe-doofus >=1.0.0)
   extra_dev_deps << %w(hoe-git >=1.3.0)
   extra_dev_deps << %w(hoe-telicopter >=1.0.0)
+  extra_dev_deps << %w(minitest >=1.5.0)
   
   clean_globs << 'blah*png' << 'images/*_thumb.*'
 
