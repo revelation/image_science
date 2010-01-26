@@ -11,7 +11,7 @@ require 'inline'
 # http://seattlerb.rubyforge.org/ImageScience.html
 
 class ImageScience
-  VERSION = '1.2.4'
+  VERSION = '1.2.5'
 
   ##
   # The top-level image loader opens +path+ and then yields the image.
@@ -116,6 +116,7 @@ class ImageScience
     end
 
     self.resize(w.to_i, h.to_i) do |image|
+      puts image.nil? ? "resize() yielded nil" : "image yielded #{image.width} x #{image.height}"
       yield image
     end
   end
