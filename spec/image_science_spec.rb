@@ -1,6 +1,6 @@
 $:.unshift(File.dirname(__FILE__) + '/..')
 
-require 'image_science'
+require 'ext/image_science'
 
 describe ImageScience do
 

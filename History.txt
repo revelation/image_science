@@ -1,6 +1,8 @@
 == 1.1.0 / 2010-02-05
 
 * converted to use extconf (removed ruby-inline)
+* converted tests to rspec
+* added tests for different file types (gif, png, jpg)
 
 == 1.0.0 / 2010-01-14
 
