@@ -11,6 +11,13 @@ doesn't leak memory like a sieve. :)
 
 For more information including build steps, see http://seattlerb.rubyforge.org/
 
+== FORK
+
+This is a fork of seattlerb/image_science.
+Converted to use extconf instead of ruby-inline.
+added get_pixel_color() method.
+See History.txt for the full list of changes since the fork.
+
 == FEATURES/PROBLEMS:
 
 * Glorious graphics manipulation magi... errr, SCIENCE! in less than 200 LoC!
