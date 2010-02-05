@@ -1,7 +1,7 @@
-#!/usr/local/bin/ruby -w
+#!/usr/bin/env ruby
 
-require 'benchmark'
 require 'rubygems'
+require 'benchmark'
 require 'image_science'
 
 max = (ARGV.shift || 100).to_i
