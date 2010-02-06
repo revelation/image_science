@@ -5,7 +5,7 @@ Rakefile
 README.txt
 bench.rb
 ext/extconf.rb
-ext/image_science_ext.c
+ext/image_science_ext.c.in
 bin/image_science_thumb
 lib/image_science.rb
 spec/spec_helper.rb

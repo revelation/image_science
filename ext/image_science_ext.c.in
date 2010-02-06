@@ -10,9 +10,15 @@
 #include "ruby.h"
 #include "FreeImage.h"
 
-#define GET_BITMAP(name) Data_Get_Struct(self, FIBITMAP, (name)); if (!(name)) rb_raise(rb_eTypeError, "Bitmap has already been freed");
+#define GET_BITMAP(name) Data_Get_Struct(self, FIBITMAP, (name)); if (!(name)) rb_raise(rb_eTypeError, "Bitmap has already been freed")
+#define DEF_RB_CONST(klass, name) rb_define_const(klass, #name, INT2FIX(name))
+#define RB_BOOL(value) (value ? Qtrue : Qfalse)
 
-VALUE isc;  /* ImageScience class */
+VALUE isc;               /* ImageScience class */
+VALUE isc_image_types;   /* ImageScience::ImageTypes module */
+VALUE isc_image_formats; /* ImageScience::ImageFormats module */
+VALUE isc_color_chan;    /* ImageScience::ColorChannels module */
+VALUE isc_color_types;   /* ImageScience::ColorTypes module */
 
 static VALUE unload(VALUE self) {
   FIBITMAP *bitmap;
@@ -52,7 +58,10 @@ static void FreeImageErrorHandler(FREE_IMAGE_FORMAT fif, const char *message) {
 /****** Class methods ******/
 
 /*
- * The top-level image loader opens +path+ and then yields the image.
+ * call-seq:
+ *   with_image(filename) { |img| ... }
+ *
+ * The top-level image loader opens +filename+ and then yields the image.
  */
 static VALUE with_image(VALUE klass, VALUE filename) {
   FREE_IMAGE_FORMAT fif = FIF_UNKNOWN;
@@ -91,7 +100,10 @@ static VALUE with_image(VALUE klass, VALUE filename) {
 }
 
 /*
- * The top-level image loader, opens an image from the string +data+
+ * call-seq:
+ *   with_image_from_memory(image_data) { |img| ... }
+ *
+ * The top-level image loader, opens an image from the string +image_data+
  * and then yields the image.
  */
 static VALUE with_image_from_memory(VALUE klass, VALUE image_data) {
@@ -123,13 +135,19 @@ static VALUE with_image_from_memory(VALUE klass, VALUE image_data) {
 }
 
 /*
- * get FreeImage library version
+ * Returns the FreeImage library version.
  */
 static VALUE get_version(VALUE self) {
   const char *version = FreeImage_GetVersion();
   return rb_str_new2(version);
 }
 
+/* 
+ * Orders FreeImage to analyze the bitmap signature. The method then
+ * returns one of the predefined ImageScience::ImageFormats or a bitmap
+ * identification number registered by a plugin. The size parameter is
+ * currently not used and can be set to 0.
+ */
 static VALUE file_type(VALUE self, VALUE filename) {
   char * input = RSTRING(filename)->ptr;
   FREE_IMAGE_FORMAT fif = FIF_UNKNOWN; 
@@ -180,20 +198,23 @@ static VALUE width(VALUE self) {
 }
 
 /*
- * Returns an array representing the color of the given pixel (blue,green,red)
+ * call-seq:
+ *   get_pixel_color(x, y) -> [red, green, blue]
+ *
+ * Returns an array representing the color of the given pixel [red,green,blue]
  */
 static VALUE get_pixel_color(VALUE self, VALUE xval, VALUE yval) {
   FIBITMAP *bitmap;
   RGBQUAD rgb;
   RGBQUAD *pal;
   BYTE rgb_index;
-  GET_BITMAP(bitmap);
   FREE_IMAGE_COLOR_TYPE ctype;
   VALUE out_ary = rb_ary_new2(3);
   int x = NUM2INT(xval);
   int y = NUM2INT(yval);
   int success = 0;
 
+  GET_BITMAP(bitmap);
   ctype = FreeImage_GetColorType(bitmap);
 
   if(ctype == FIC_PALETTE) {
@@ -217,7 +238,10 @@ static VALUE get_pixel_color(VALUE self, VALUE xval, VALUE yval) {
   return out_ary;
 }
 
-/***
+/*
+ * call-seq:
+ *   resize(width, height) { |img| ... }
+ *
  * Resizes the image to +width+ and +height+ using a cubic-bspline
  * filter and yields the new image.
  */
@@ -238,6 +262,9 @@ static VALUE resize(VALUE self, VALUE width, VALUE height) {
 }
 
 /*
+ * call-seq:
+ *   save(path)
+ *
  * Saves the image out to +path+. Changing the file extension will
  * convert the file type to the appropriate format.
  */
@@ -266,6 +293,11 @@ static VALUE save(VALUE self, VALUE filename) {
   rb_raise(rb_eTypeError, "Unknown file format");
 }
 
+/*
+ * Investigates the color type of the bitmap by reading the bitmap’s
+ *  pixel bits and analysing them.  See ImageScience::ColorTypes for
+ * return values. 
+ */
 static VALUE colortype(VALUE self) {
   FIBITMAP *bitmap;
   GET_BITMAP(bitmap);
@@ -273,11 +305,110 @@ static VALUE colortype(VALUE self) {
   return INT2FIX(FreeImage_GetColorType(bitmap));
 }
 
+/*
+ * Returns the size of one pixel in the bitmap in bits. For example
+ * when each pixel takes 32-bits of space in the bitmap, this method
+ * returns 32. Possible bit depths are 1, 4, 8, 16, 24, 32 for
+ * standard bitmaps and 16-, 32-, 48-, 64-, 96- and 128-bit for non
+ * standard bitmaps.
+ */
 static VALUE depth(VALUE self) {
   FIBITMAP *bitmap;
   GET_BITMAP(bitmap);
 
   return INT2FIX(FreeImage_GetBPP(bitmap));
+}
+
+/*
+ * call-seq:
+ *   adjust_gamma(percentage) -> boolean
+ *
+ * Performs gamma correction on a 8-, 24- or 32-bit image. The gamma
+ * parameter represents the gamma value to use (gamma > 0). A value of
+ * 1.0 leaves the image alone, less than one darkens it, and greater
+ * than one lightens it.  The method returns true on success. It
+ * returns false when gamma is less than or equal to zero or when the
+ * bitdepth of the image cannot be handled.
+ */
+static VALUE adjust_gamma(VALUE self, VALUE gamma) {
+  FIBITMAP *bitmap;
+  GET_BITMAP(bitmap);
+  return RB_BOOL(FreeImage_AdjustGamma(bitmap, NUM2DBL(gamma)));
+}
+
+/*
+ * call-seq:
+ *   adjust_brightness(percentage) -> boolean
+ *
+ * Adjusts the brightness of a 8-, 24- or 32-bit image by a certain
+ * amount. This amount is given by the percentage parameter, where
+ * percentage is a value between [-100..100]. A value 0 means no
+ * change, less than 0 will make the image darker and greater than 0
+ * will make the image brighter.  The method returns true on
+ * success, false otherwise (e.g. when the bitdepth of the image
+ * cannot be handled).
+ */
+static VALUE adjust_brightness(VALUE self, VALUE percentage) {
+  FIBITMAP *bitmap;
+  GET_BITMAP(bitmap);
+  return RB_BOOL(FreeImage_AdjustBrightness(bitmap, NUM2DBL(percentage)));
+}
+
+/*
+ * call-seq:
+ *   adjust_contrast(percentage) -> boolean
+ *
+ * Adjusts the contrast of a 8-, 24- or 32-bit image by a certain
+ * amount. This amount is given by the percentage parameter, where
+ * percentage is a value between [-100..100]. A value 0 means no change,
+ * less than 0 will decrease the contrast and greater than 0 will
+ * increase the contrast of the image.  The method returns true on
+ * success, false otherwise (e.g. when the bitdepth of the image cannot
+ * be handled).
+ */
+static VALUE adjust_contrast(VALUE self, VALUE percentage) {
+  FIBITMAP *bitmap;
+  GET_BITMAP(bitmap);
+  return RB_BOOL(FreeImage_AdjustContrast(bitmap, NUM2DBL(percentage)));
+}
+
+/* Inverts each pixel data. Returns true on success. */
+static VALUE invert(VALUE self) {
+  FIBITMAP *bitmap;
+  GET_BITMAP(bitmap);
+  return RB_BOOL(FreeImage_Invert(bitmap));
+}
+
+/*
+ * call-seq:
+ *   histogram(channel = ImageScience::FICC_RGB) -> array or false
+ *
+ * Computes the image histogram. For 24-bit and 32-bit images,
+ * histogram can be computed from red, green, blue and black
+ * channels. For 8-bit images, histogram is computed from the black
+ * channel. Other bit depth is not supported.
+ * The method returns an 256 element array on success, nil otherwise.
+ */
+static VALUE histogram(int argc, VALUE *argv, VALUE self) {
+  FIBITMAP *bitmap;
+  DWORD histo[256];
+  VALUE channel;  /* optional argument */
+  FREE_IMAGE_COLOR_CHANNEL fi_chan;
+  VALUE ret = Qnil;
+  int i;
+
+  rb_scan_args(argc, argv, "01", &channel);  /* 1 optional argument */
+  
+  fi_chan = NIL_P(channel) ? FICC_RGB : FIX2INT(channel);
+
+  GET_BITMAP(bitmap);
+  if(FreeImage_GetHistogram(bitmap, histo, fi_chan)) {
+    ret = rb_ary_new2(256);
+    for(i = 0; i < 256; i++) {
+      rb_ary_store(ret, i, INT2FIX(histo[i]));
+    }
+  }
+  return ret;
 }
 
 /* -- initialiser ---- */
@@ -300,6 +431,26 @@ void Init_image_science_ext(void)
   rb_define_method(isc, "get_pixel_color", get_pixel_color, 2);
   rb_define_method(isc, "colortype", colortype, 0);
   rb_define_method(isc, "depth", depth, 0);
+  rb_define_method(isc, "adjust_gamma", adjust_gamma, 1);
+  rb_define_method(isc, "adjust_brightness", adjust_brightness, 1);
+  rb_define_method(isc, "adjust_contrast", adjust_contrast, 1);
+  rb_define_method(isc, "invert", invert, 0);
+  rb_define_method(isc, "histogram", histogram, -1);  /* variable args */
+
+  /* FREE_IMAGE_TYPE constants */
+  isc_image_types = rb_define_module_under(isc, "ImageTypes");
+  /* expand FreeImage constants isc_image_types FIT */
+
+  /* FREE_IMAGE_COLOR_CHANNEL constants */
+  isc_color_chan = rb_define_module_under(isc, "ColorChannels");
+  /* expand FreeImage constants isc_color_chan FICC */
+
+  /* FREE_IMAGE_COLOR_TYPE constants */
+  isc_color_types = rb_define_module_under(isc, "ColorTypes");
+  /* expand FreeImage constants isc_color_types FIC */
+
+  isc_image_formats = rb_define_module_under(isc, "ImageFormats");
+  /* expand FreeImage constants isc_image_formats FIF */
 
   FreeImage_SetOutputMessage(FreeImageErrorHandler);
 }

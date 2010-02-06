@@ -3,7 +3,9 @@
 *.swp
 tmp/**/* 
 ext/Makefile
+ext/image_science_ext.c
 *.o
 *.so
 mkmf.log
 pkg
+doc

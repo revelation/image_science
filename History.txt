@@ -1,3 +1,13 @@
+== 1.1.1 / 2010-02-06
+
+* merged changes from scambra/master (depth, colorspace, image_type, colortype, file_type methods)
+* reinstated lib/image_science.rb for methods implemented in ruby, c extension 
+is now named image_science_ext
+* added histogram, invert, adjust_contrast, adjust_brightness, adjust_gamma
+* fixed up rdoc
+* defines various FreeImage constants
+* generate ext/image_science_ext.c from ext/image_science_ext.c.in
+
 == 1.1.0 / 2010-02-05
 
 * converted to use extconf (removed ruby-inline)

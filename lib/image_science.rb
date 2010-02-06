@@ -2,7 +2,7 @@ require File.dirname(__FILE__) + '/../ext/image_science_ext'
 
 class ImageScience
 
-  VERSION = "1.1.0"
+  VERSION = "1.1.1"
 
   ##
   # Returns the type of the image.
@@ -14,6 +14,9 @@ class ImageScience
     type = file_type(path)
     file_types[type]
   end
+
+  ##
+  # Returns the colorspace of the image as a string
 
   def colorspace
     case colortype

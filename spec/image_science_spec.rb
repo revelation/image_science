@@ -1,6 +1,6 @@
-# $:.unshift(File.dirname(__FILE__) + '/..')
-
 require File.dirname(__FILE__) + '/../lib/image_science'
+
+include ImageScience::ColorChannels
 
 describe ImageScience do
 
@@ -209,6 +209,62 @@ describe ImageScience do
           expected = { 'gif' => 8, 'jpg' => 24, 'png' => 24 }
           ImageScience.with_image image_path(ext) do |img|
             img.depth.should == expected[ext]
+          end
+        end
+      end
+
+      describe "adjust_gamma" do
+        it "should perform gamma correction" do
+          ImageScience.with_image image_path(ext) do |img|
+            # darken image
+            img.adjust_gamma(0.5).should be_true
+          end
+        end
+      end
+
+      describe "adjust_brightness" do
+        it "should adjust brightness" do
+          ImageScience.with_image image_path(ext) do |img|
+            # 50% brighter
+            img.adjust_brightness(50).should be_true
+          end
+        end
+      end
+
+      describe "adjust_contrast" do
+        it "should adjust contrast" do
+          ImageScience.with_image image_path(ext) do |img|
+            # 50% less contrast
+            img.adjust_contrast(-50).should be_true
+          end
+        end
+      end
+
+      describe "invert" do
+        it "should invert pixel data" do
+          ImageScience.with_image image_path(ext) do |img|
+            # 50% less contrast
+            img.invert.should be_true
+          end
+        end
+      end
+
+      describe "histogram" do
+        it "should compute the image histogram" do
+          ImageScience.with_image image_path(ext) do |img|
+            h = img.histogram
+            h.should be_kind_of(Array)
+            h.length.should == 256
+          end
+        end
+
+        it "should compute the image histogram for a given channel" do
+          ImageScience.with_image image_path(ext) do |img|
+            [FICC_RED, FICC_GREEN, FICC_BLUE].each do |channel|
+              h = img.histogram(channel)
+              h.should be_kind_of(Array)
+              h.length.should == 256
+            end
           end
         end
       end
