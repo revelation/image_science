@@ -130,6 +130,15 @@ static VALUE get_version(VALUE self) {
   return rb_str_new2(version);
 }
 
+static VALUE file_type(VALUE self, VALUE filename) {
+  char * input = RSTRING(filename)->ptr;
+  FREE_IMAGE_FORMAT fif = FIF_UNKNOWN; 
+
+  fif = FreeImage_GetFileType(input, 0); 
+  if (fif == FIF_UNKNOWN) fif = FreeImage_GetFIFFromFilename(input); 
+  return (fif == FIF_UNKNOWN) ? Qnil : INT2FIX(fif);
+}
+
 /*********** Instance methods ***********/
 
 /*
@@ -257,7 +266,19 @@ static VALUE save(VALUE self, VALUE filename) {
   rb_raise(rb_eTypeError, "Unknown file format");
 }
 
+static VALUE colortype(VALUE self) {
+  FIBITMAP *bitmap;
+  GET_BITMAP(bitmap);
 
+  return INT2FIX(FreeImage_GetColorType(bitmap));
+}
+
+static VALUE depth(VALUE self) {
+  FIBITMAP *bitmap;
+  GET_BITMAP(bitmap);
+
+  return INT2FIX(FreeImage_GetBPP(bitmap));
+}
 
 /* -- initialiser ---- */
 
@@ -268,6 +289,7 @@ void Init_image_science_ext(void)
   rb_define_singleton_method(isc, "with_image_from_memory",
 			     with_image_from_memory, 1);
   rb_define_singleton_method(isc, "get_version", get_version, 0);
+  rb_define_singleton_method(isc, "file_type", file_type, 1);
 
   //rb_define_method(isc, "initialize", t_init, 0);
   rb_define_method(isc, "width", width, 0);
@@ -276,6 +298,8 @@ void Init_image_science_ext(void)
   rb_define_method(isc, "save", save, 1);
   rb_define_method(isc, "with_crop", with_crop, 4);
   rb_define_method(isc, "get_pixel_color", get_pixel_color, 2);
+  rb_define_method(isc, "colortype", colortype, 0);
+  rb_define_method(isc, "depth", depth, 0);
 
   FreeImage_SetOutputMessage(FreeImageErrorHandler);
 }

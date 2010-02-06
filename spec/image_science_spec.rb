@@ -177,6 +177,42 @@ describe ImageScience do
           thumbnail_created.should be_true
         end
       end
+
+      # image_type calls ImageScience.file_type, converts to string.
+      describe "image_type" do
+        it "should return the image type" do
+          expected = {
+            'gif' => 'GIF',
+            'jpg' => 'JPEG',
+            'png' => 'PNG'
+          }
+          ImageScience.image_type(image_path(ext)).should == expected[ext]
+        end
+      end
+
+      # colorspace calls img.colortype & img.depth, converts to string
+      describe "colorspace" do
+        it "should return the color space" do
+          expected = {
+            'gif' => 'Indexed',
+            'jpg' => 'RGB',
+            'png' => 'RGB'
+          }
+          ImageScience.with_image image_path(ext) do |img|
+            img.colorspace.should == expected[ext]
+          end
+        end
+      end
+
+      describe "depth" do
+        it "should return the BPP of the image" do
+          expected = { 'gif' => 8, 'jpg' => 24, 'png' => 24 }
+          ImageScience.with_image image_path(ext) do |img|
+            img.depth.should == expected[ext]
+          end
+        end
+      end
+
     end
   end
 

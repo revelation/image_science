@@ -5,6 +5,28 @@ class ImageScience
   VERSION = "1.1.0"
 
   ##
+  # Returns the type of the image.
+
+  def self.image_type(path)
+    file_types = %W{BMP ICO JPEG JNG KOALA IFF MNG PBM PBMRAW PCD PCX PGM
+                    PGMRAW PNG PPM PPMRAW RAS TARGA TIFF WBMP PSD CUT XBM
+                    XPM DDS GIF HDR FAXG3 SGI EXR J2K JP2}
+    type = file_type(path)
+    file_types[type]
+  end
+
+  def colorspace
+    case colortype
+      when 0 then depth == 1 ? 'InvertedMonochrome' : 'InvertedGrayscale'
+      when 1 then depth == 1 ? 'Monochrome' : 'Grayscale'
+      when 2 then 'RGB'
+      when 3 then 'Indexed'
+      when 4 then 'RGBA'
+      when 5 then 'CMYK'
+    end
+  end
+
+  ##
   # Creates a proportional thumbnail of the image scaled so its longest
   # edge is resized to +size+ and yields the new image.
 
@@ -35,7 +57,5 @@ class ImageScience
       end
     end
   end
-
-
 
 end
