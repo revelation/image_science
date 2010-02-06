@@ -1,6 +1,6 @@
-$:.unshift(File.dirname(__FILE__) + '/..')
+# $:.unshift(File.dirname(__FILE__) + '/..')
 
-require 'ext/image_science'
+require File.dirname(__FILE__) + '/../lib/image_science'
 
 describe ImageScience do
 
@@ -14,6 +14,12 @@ describe ImageScience do
   after(:each) do
     FILE_TYPES.each do |ext|
       File.unlink tmp_image_path(ext) if File.exist? tmp_image_path(ext)
+    end
+  end
+
+  describe "get_version" do
+    it "should return the image science version" do
+      ImageScience.get_version.should_not be_nil
     end
   end
   

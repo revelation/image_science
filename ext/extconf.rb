@@ -4,4 +4,4 @@ dir_config('freeimage')
 
 have_header('FreeImage.h') &&
   have_library('freeimage', 'FreeImage_Load') &&
-  create_makefile("image_science")
+  create_makefile("image_science_ext")

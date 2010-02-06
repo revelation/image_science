@@ -10,7 +10,6 @@
 #include "ruby.h"
 #include "FreeImage.h"
 
-#define IMAGE_SCIENCE_RUBY_VERSION "1.1.0"
 #define GET_BITMAP(name) Data_Get_Struct(self, FIBITMAP, (name)); if (!(name)) rb_raise(rb_eTypeError, "Bitmap has already been freed");
 
 VALUE isc;  /* ImageScience class */
@@ -49,6 +48,8 @@ static void FreeImageErrorHandler(FREE_IMAGE_FORMAT fif, const char *message) {
 	   (fif == FIF_UNKNOWN) ? "???" : FreeImage_GetFormatFromFIF(fif),
 	   message);
 }
+
+/****** Class methods ******/
 
 /*
  * The top-level image loader opens +path+ and then yields the image.
@@ -120,6 +121,16 @@ static VALUE with_image_from_memory(VALUE klass, VALUE image_data) {
   }
   return result;
 }
+
+/*
+ * get FreeImage library version
+ */
+static VALUE get_version(VALUE self) {
+  const char *version = FreeImage_GetVersion();
+  return rb_str_new2(version);
+}
+
+/*********** Instance methods ***********/
 
 /*
  * Crops an image to +left+, +top+, +right+, and +bottom+ and then
@@ -217,60 +228,6 @@ static VALUE resize(VALUE self, VALUE width, VALUE height) {
   return Qnil;
 }
 
-/***
- * Creates a proportional thumbnail of the image scaled so its longest
- * edge is resized to +size+ and yields the new image.
- */
-static VALUE thumbnail(VALUE self, VALUE size) {
-  FIBITMAP *bitmap;
-  GET_BITMAP(bitmap);
-  int w = FreeImage_GetWidth(bitmap);
-  int h = FreeImage_GetHeight(bitmap);
-  float scale;
-
-  scale = (float) NUM2INT(size) / (w > h ? w : h);
-
-  return resize(self, INT2FIX((int) (w * scale)), INT2FIX((int) (h * scale)));
-}
-
-/*
- * Creates a square thumbnail of the image cropping the longest edge
- * to match the shortest edge, resizes to +size+, and yields the new
- * image.
- */
-static VALUE cropped_thumbnail(VALUE self, VALUE size) {
-  FIBITMAP *bitmap, *crop;
-  FIBITMAP *scaled = NULL;
-  GET_BITMAP(bitmap);
-  int w = FreeImage_GetWidth(bitmap);
-  int h = FreeImage_GetHeight(bitmap);
-  int l = 0, t = 0, r = w, b = h, half = abs(w - h) / 2;
-
-  if(w > h) {
-    l = half;
-    r = half + h;
-  } else if(h > w) {
-    t = half;
-    b = half + w;
-  }
-
-  /* create cropped image */
-  crop = FreeImage_Copy(bitmap, l, t, r, b);
-
-  if(crop) {
-    /* create rescaled image */
-    scaled = FreeImage_Rescale(crop, NUM2INT(size), NUM2INT(size),
-			       FILTER_CATMULLROM);
-    FreeImage_Unload(crop);
-  }
-
-  if(scaled) {
-    copy_icc_profile(self, bitmap, scaled);
-    return wrap_and_yield(scaled, self, 0);
-  }
-  return Qnil;
-}
-
 /*
  * Saves the image out to +path+. Changing the file extension will
  * convert the file type to the appropriate format.
@@ -300,14 +257,17 @@ static VALUE save(VALUE self, VALUE filename) {
   rb_raise(rb_eTypeError, "Unknown file format");
 }
 
+
+
 /* -- initialiser ---- */
 
-void Init_image_science(void)
+void Init_image_science_ext(void)
 {
   isc = rb_define_class("ImageScience", rb_cObject);
   rb_define_singleton_method(isc, "with_image", with_image, 1);
   rb_define_singleton_method(isc, "with_image_from_memory",
 			     with_image_from_memory, 1);
+  rb_define_singleton_method(isc, "get_version", get_version, 0);
 
   //rb_define_method(isc, "initialize", t_init, 0);
   rb_define_method(isc, "width", width, 0);
@@ -316,10 +276,6 @@ void Init_image_science(void)
   rb_define_method(isc, "save", save, 1);
   rb_define_method(isc, "with_crop", with_crop, 4);
   rb_define_method(isc, "get_pixel_color", get_pixel_color, 2);
-  rb_define_method(isc, "thumbnail", thumbnail, 1);
-  rb_define_method(isc, "cropped_thumbnail", cropped_thumbnail, 1);
-
-  rb_define_const(isc, "VERSION", rb_str_new2(IMAGE_SCIENCE_RUBY_VERSION));
 
   FreeImage_SetOutputMessage(FreeImageErrorHandler);
 }
