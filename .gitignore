@@ -9,3 +9,4 @@ ext/image_science_ext.c
 mkmf.log
 pkg
 doc
+coverage

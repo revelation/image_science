@@ -1,10 +1,11 @@
 require File.dirname(__FILE__) + '/../lib/image_science'
 
 include ImageScience::ColorChannels
+include ImageScience::ImageFilters
 
 describe ImageScience do
 
-  FILE_TYPES = %W{png jpg gif}
+  FILE_TYPES = %W{png jpg gif bmp tif}
 
   before(:each) do
     @path = 'spec/fixtures'
@@ -125,22 +126,55 @@ describe ImageScience do
             File.exists?(tmp_image_path(ext)).should be_false
           end
         end
+
+        it "should resize the image in-place if no block given" do
+          ImageScience.with_image image_path(ext) do |img|
+            img.resize(20, 20).should be_true
+            img.width.should == 20
+            img.height.should == 20
+          end
+        end
+
+        it "should resize the image with the given filter" do
+          ImageScience.with_image image_path(ext) do |img|
+            img.resize(20, 20, FILTER_BILINEAR).should be_true
+            img.width.should == 20
+            img.height.should == 20
+          end
+        end
         
+      end
+
+      describe "data" do
+        it "should return image data" do
+          ImageScience.with_image image_path(ext) do |img|
+            expected = File.size(image_path(ext))
+            tolerance = expected * 0.05
+
+            data = img.data
+            data.should_not be_nil
+            #data.length.should be_close(expected, tolerance)
+          end
+        end
       end
       
       describe "get_pixel_color" do
         it "should get pixel color" do
           expected = {
-            :jpg => [[61, 134, 123], [0, 18, 13]],
+            :jpg => [[62, 134, 122], [0, 14, 7]],
             :png => [[62, 134, 121], [1, 2, 2]],
-            :gif => [[59, 135, 119], [0, 2, 0]]
+            :gif => [[59, 135, 119], [0, 2, 0]],
+            :bmp => [[62, 134, 121], [1, 2, 2]],
+            :tif => [[62, 134, 121], [1, 2, 2]]
           }
 
           ImageScience.with_image image_path(ext) do |img|
             rgb = img.get_pixel_color(10,7)
+            rgb.should_not be_nil
             rgb.should == expected[ext.to_sym][0]
           
             rgb = img.get_pixel_color(24,0)
+            rgb.should_not be_nil
             rgb.should == expected[ext.to_sym][1]
           end
         end
@@ -160,6 +194,17 @@ describe ImageScience do
           end
           thumbnail_created.should be_true
         end
+
+        it "should create a proportional thumbnail in-place if no block given" do
+          thumbnail_created = false
+          ImageScience.with_image image_path(ext, "pix2") do |img|
+            img.thumbnail(30)
+            img.width.should  == 30
+            img.height.should == img.width / 2 # half of width
+            thumbnail_created = true
+          end
+          thumbnail_created.should be_true
+        end
       end
       
       describe "cropped_thumbnail" do
@@ -176,17 +221,47 @@ describe ImageScience do
           end
           thumbnail_created.should be_true
         end
+
+        it "should create a square thumbnail in-place if no block given" do
+          thumbnail_created = false
+          ImageScience.with_image image_path(ext, "pix2") do |img|
+            img.cropped_thumbnail(30)
+            img.width.should == 30
+            img.height.should == 30   # same as width
+            thumbnail_created = true
+          end
+          thumbnail_created.should be_true
+        end
+      end
+
+      describe "crop" do
+        it "should crop the image in-place if no block given" do
+          ImageScience.with_image image_path(ext) do |img|
+            img.crop(0, 0, 25, 20).should be_true
+            img.width.should == 25
+            img.height.should == 20
+          end
+        end
       end
 
       # image_type calls ImageScience.file_type, converts to string.
+      # allow calling as a class or instance method
       describe "image_type" do
-        it "should return the image type" do
-          expected = {
-            'gif' => 'GIF',
-            'jpg' => 'JPEG',
-            'png' => 'PNG'
-          }
+        expected = {
+          'gif' => 'GIF',
+          'jpg' => 'JPEG',
+          'png' => 'PNG',
+          'bmp' => 'BMP',
+          'tif' => 'TIFF'
+        }
+        it "should return the image type (class method)" do
           ImageScience.image_type(image_path(ext)).should == expected[ext]
+        end
+
+        it "should return the image type (instance method)" do
+          ImageScience.with_image image_path(ext) do |img|
+            img.image_type.should == expected[ext]
+          end
         end
       end
 
@@ -196,7 +271,9 @@ describe ImageScience do
           expected = {
             'gif' => 'Indexed',
             'jpg' => 'RGB',
-            'png' => 'RGB'
+            'png' => 'RGB',
+            'bmp' => 'RGB',
+            'tif' => 'RGB'
           }
           ImageScience.with_image image_path(ext) do |img|
             img.colorspace.should == expected[ext]
@@ -206,7 +283,13 @@ describe ImageScience do
 
       describe "depth" do
         it "should return the BPP of the image" do
-          expected = { 'gif' => 8, 'jpg' => 24, 'png' => 24 }
+          expected = {
+            'gif' => 8,
+            'jpg' => 24,
+            'png' => 24,
+            'bmp' => 24,
+            'tif' => 24
+          }
           ImageScience.with_image image_path(ext) do |img|
             img.depth.should == expected[ext]
           end

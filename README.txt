@@ -15,7 +15,7 @@ For more information including build steps, see http://seattlerb.rubyforge.org/
 
 This is a fork of seattlerb/image_science.
 Converted to use extconf instead of ruby-inline.
-added get_pixel_color() method.
+Added many new features.
 See History.txt for the full list of changes since the fork.
 
 == FEATURES/PROBLEMS:

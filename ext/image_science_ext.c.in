@@ -9,14 +9,15 @@
 
 #include "ruby.h"
 #include "FreeImage.h"
+#include <sys/stat.h>
 
 #define GET_BITMAP(name) Data_Get_Struct(self, FIBITMAP, (name)); if (!(name)) rb_raise(rb_eTypeError, "Bitmap has already been freed")
-#define DEF_RB_CONST(klass, name) rb_define_const(klass, #name, INT2FIX(name))
 #define RB_BOOL(value) (value ? Qtrue : Qfalse)
 
 VALUE isc;               /* ImageScience class */
 VALUE isc_image_types;   /* ImageScience::ImageTypes module */
 VALUE isc_image_formats; /* ImageScience::ImageFormats module */
+VALUE isc_image_filters; /* ImageScience::ImageFilters module */
 VALUE isc_color_chan;    /* ImageScience::ColorChannels module */
 VALUE isc_color_types;   /* ImageScience::ColorTypes module */
 
@@ -67,6 +68,9 @@ static VALUE with_image(VALUE klass, VALUE filename) {
   FREE_IMAGE_FORMAT fif = FIF_UNKNOWN;
   int flags;
   char *input = RSTRING(filename)->ptr;
+  struct stat buf;
+
+  if(stat(input, &buf)) rb_raise(rb_eTypeError, "file not found");
 
   fif = FreeImage_GetFileType(input, 0);
   if (fif == FIF_UNKNOWN) fif = FreeImage_GetFIFFromFilename(input);
@@ -159,9 +163,103 @@ static VALUE file_type(VALUE self, VALUE filename) {
 
 /*********** Instance methods ***********/
 
+static unsigned _data_write(void *buffer, unsigned size, unsigned count, fi_handle handle) {
+  VALUE self = (VALUE)handle;
+  VALUE data = rb_iv_get(self, "@data");
+  VALUE pos = rb_iv_get(self, "@data_pos");
+  long current_pos = FIX2INT(pos);
+  long end_pos = current_pos + size * count;
+
+  //fprintf(stderr, "in _data_write: pos=%ld, size=%d, count=%d\n", current_pos, size, count);
+  
+  if(end_pos > RSTRING(data)->len) {
+    rb_str_resize(data, end_pos);
+  }
+  memcpy(RSTRING(data)->ptr + current_pos, buffer, size * count);
+  rb_iv_set(self, "@data_pos", INT2FIX(end_pos));
+  return count;
+}
+
+static long _data_tell(fi_handle handle) {
+  //fprintf(stderr, "in _data_tell\n");
+  return FIX2INT(rb_iv_get((VALUE) handle, "@data_pos"));
+}
+
+/* tif writer calls read during a write... */
+static unsigned _data_read(void *buffer, unsigned size, unsigned count, fi_handle handle) {
+  VALUE self = (VALUE)handle;
+  VALUE data = rb_iv_get(self, "@data");
+  VALUE pos = rb_iv_get(self, "@data_pos");
+  long current_pos = FIX2INT(pos);
+  long read_length = size * count;
+
+  //fprintf(stderr, "in _data_read: pos=%ld, size=%d, count=%d\n", current_pos, size, count);
+
+  if(current_pos + read_length > RSTRING(data)->len)
+    read_length = RSTRING(data)->len - current_pos;
+
+  memcpy(buffer, RSTRING(data)->ptr + current_pos, read_length);
+  return read_length;
+}
+
+static int _data_seek(fi_handle handle, long offset, int origin) {
+  long new_pos = 0;
+  VALUE data;
+
+  //fprintf(stderr, "in _data_seek: offset = %ld, origin = %d\n", offset, origin);
+  switch(origin) {
+  case SEEK_SET:
+    new_pos = offset;
+    break;
+  case SEEK_CUR:
+    new_pos = _data_tell(handle) + offset;
+    break;
+  case SEEK_END:
+    data = rb_iv_get((VALUE) handle, "@data");
+    new_pos = RSTRING(data)->len + offset;
+  }
+
+  rb_iv_set((VALUE) handle, "@data_pos", INT2FIX(new_pos));
+  return 1;  /* success */
+}
+
 /*
- * Crops an image to +left+, +top+, +right+, and +bottom+ and then
- * yields the new image.
+ * Returns the image data as a string.
+ */
+static VALUE data(VALUE self) {
+  FIBITMAP *bitmap;
+  int flags = 0;
+  FREE_IMAGE_FORMAT fif;
+  VALUE str = Qnil;
+  int ok;
+  FreeImageIO io;
+
+  GET_BITMAP(bitmap);
+  fif = FIX2INT(rb_iv_get(self, "@file_type"));
+
+  io.read_proc = _data_read;
+  io.write_proc = _data_write;
+  io.seek_proc = _data_seek;
+  io.tell_proc = _data_tell;
+
+  str = rb_str_new2("");
+  rb_iv_set(self, "@data_pos", INT2FIX(0));
+  rb_iv_set(self, "@data", str);
+  ok = FreeImage_SaveToHandle(fif, bitmap, &io, (fi_handle)self, flags);
+  str = rb_iv_get(self, "@data");
+  rb_iv_set(self, "@data", Qnil);
+
+  return str;
+}
+
+/*
+ * call-seq:
+ *   crop(left, top, right, bottom)
+ *   with_crop(left, top, right, bottom) { |img| ... }
+ *
+ * Crops an image to +left+, +top+, +right+, and +bottom+.
+ * If a block is given, yields the new image, else returns
+ * true on success.
  */
 static VALUE with_crop(VALUE self, VALUE lv, VALUE tv, VALUE rv, VALUE bv) {
   FIBITMAP *copy, *bitmap;
@@ -172,7 +270,13 @@ static VALUE with_crop(VALUE self, VALUE lv, VALUE tv, VALUE rv, VALUE bv) {
 			NUM2INT(rv), NUM2INT(bv));
   if (copy) {
     copy_icc_profile(self, bitmap, copy);
-    result = wrap_and_yield(copy, self, 0);
+    if(rb_block_given_p()) {
+      result = wrap_and_yield(copy, self, 0);
+    } else {
+      result = Qtrue;
+      unload(self);
+      DATA_PTR(self) = copy;
+    }
   }
   return result;
 }
@@ -240,25 +344,42 @@ static VALUE get_pixel_color(VALUE self, VALUE xval, VALUE yval) {
 
 /*
  * call-seq:
- *   resize(width, height) { |img| ... }
+ *   resize(width, height, filter = FILTER_CATMULLROM)
+ *   resize(width, height, filter = FILTER_CATMULLROM) { |img| ... }
  *
- * Resizes the image to +width+ and +height+ using a cubic-bspline
- * filter and yields the new image.
+ * Resizes the image to +width+ and +height+.  Optionally specify a filter to
+ * use with the filter argument (See FreeImage::ImageFilters).
+ * If a block is given, yields the new image, else returns
+ * true on success.
  */
-static VALUE resize(VALUE self, VALUE width, VALUE height) {
+static VALUE resize(int argc, VALUE *argv, VALUE self) {
   FIBITMAP *bitmap, *image;
-  int w = NUM2INT(width);
-  int h = NUM2INT(height);
+  VALUE width, height, filter;
+  FREE_IMAGE_FILTER fi_filter;
+  int w, h;
+
+  rb_scan_args(argc, argv, "21", &width, &height, &filter);
+  fi_filter = NIL_P(filter) ? FILTER_CATMULLROM : FIX2INT(filter);
+
+  w = NUM2INT(width);
+  h = NUM2INT(height);
 
   if (w <= 0) rb_raise(rb_eArgError, "Width <= 0");
   if (h <= 0) rb_raise(rb_eArgError, "Height <= 0");
+
   GET_BITMAP(bitmap);
-  image = FreeImage_Rescale(bitmap, w, h, FILTER_CATMULLROM);
+  image = FreeImage_Rescale(bitmap, w, h, fi_filter);
+
   if (image) {
     copy_icc_profile(self, bitmap, image);
-    return wrap_and_yield(image, self, 0);
+    if(rb_block_given_p()) {
+      return wrap_and_yield(image, self, 0);
+    } else {
+      unload(self);
+      DATA_PTR(self) = image;
+    }
   }
-  return Qnil;
+  return image ? Qtrue : Qfalse;
 }
 
 /*
@@ -294,8 +415,8 @@ static VALUE save(VALUE self, VALUE filename) {
 }
 
 /*
- * Investigates the color type of the bitmap by reading the bitmap’s
- *  pixel bits and analysing them.  See ImageScience::ColorTypes for
+ * Investigates the color type of the bitmap by reading the bitmap's
+ * pixel bits and analysing them.  See ImageScience::ColorTypes for
  * return values. 
  */
 static VALUE colortype(VALUE self) {
@@ -321,7 +442,7 @@ static VALUE depth(VALUE self) {
 
 /*
  * call-seq:
- *   adjust_gamma(percentage) -> boolean
+ *   adjust_gamma(gamma) -> boolean
  *
  * Performs gamma correction on a 8-, 24- or 32-bit image. The gamma
  * parameter represents the gamma value to use (gamma > 0). A value of
@@ -381,13 +502,14 @@ static VALUE invert(VALUE self) {
 
 /*
  * call-seq:
- *   histogram(channel = ImageScience::FICC_RGB) -> array or false
+ *   histogram(channel = FICC_RGB) -> array or nil
  *
  * Computes the image histogram. For 24-bit and 32-bit images,
  * histogram can be computed from red, green, blue and black
  * channels. For 8-bit images, histogram is computed from the black
  * channel. Other bit depth is not supported.
- * The method returns an 256 element array on success, nil otherwise.
+ * The method returns a 256 element array on success, nil otherwise.
+ * See ImageScience::ColorChannels for accepted channel values.
  */
 static VALUE histogram(int argc, VALUE *argv, VALUE self) {
   FIBITMAP *bitmap;
@@ -425,9 +547,10 @@ void Init_image_science_ext(void)
   //rb_define_method(isc, "initialize", t_init, 0);
   rb_define_method(isc, "width", width, 0);
   rb_define_method(isc, "height", height, 0);
-  rb_define_method(isc, "resize", resize, 2);
+  rb_define_method(isc, "resize", resize, -1);
   rb_define_method(isc, "save", save, 1);
   rb_define_method(isc, "with_crop", with_crop, 4);
+  rb_define_method(isc, "crop", with_crop, 4);
   rb_define_method(isc, "get_pixel_color", get_pixel_color, 2);
   rb_define_method(isc, "colortype", colortype, 0);
   rb_define_method(isc, "depth", depth, 0);
@@ -436,6 +559,7 @@ void Init_image_science_ext(void)
   rb_define_method(isc, "adjust_contrast", adjust_contrast, 1);
   rb_define_method(isc, "invert", invert, 0);
   rb_define_method(isc, "histogram", histogram, -1);  /* variable args */
+  rb_define_method(isc, "data", data, 0);
 
   /* FREE_IMAGE_TYPE constants */
   isc_image_types = rb_define_module_under(isc, "ImageTypes");
@@ -449,8 +573,13 @@ void Init_image_science_ext(void)
   isc_color_types = rb_define_module_under(isc, "ColorTypes");
   /* expand FreeImage constants isc_color_types FIC */
 
+  /* FREE_IMAGE_FORMATS constants */
   isc_image_formats = rb_define_module_under(isc, "ImageFormats");
   /* expand FreeImage constants isc_image_formats FIF */
+
+  /* IMAGE_FILTER constants */
+  isc_image_filters = rb_define_module_under(isc, "ImageFilters");
+  /* expand FreeImage constants isc_image_filters FILTER */
 
   FreeImage_SetOutputMessage(FreeImageErrorHandler);
 }

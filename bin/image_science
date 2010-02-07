@@ -1,0 +1,172 @@
+#!/usr/bin/env ruby
+#
+# = Usage
+#
+# image_science [OPTIONS] [command] [param ...] [file]
+#
+# == Options
+#
+# -h, --help:
+#
+# show help
+#
+# -i, --input
+#
+# specify input file.
+# by default input is read from stdin.
+# if stdin is attached to a tty, the last argument is used as a filename.
+# e.g. image_science info pic.jpg
+#
+# -o, --output
+#
+# specify output file.
+# by default output is written to stdout, or a file named 'output'
+# if stdout is attached to a tty.
+#
+# == Commands
+#
+# The following commands are recognised
+# 
+# * info
+# * histogram
+# * get_version
+# * resize <width> <height>
+# * crop <left> <top> <right> <bottom>
+# * get_pixel_color <x> <y>
+# * adjust_gamma <value>      
+# * adjust_brightness <value>
+# * adjust_contrast <value>  
+# * invert
+# * thumbnail <size>
+# * cropped_thumbnail <size>
+#
+# Refer to the ImageScience documentation for allowed value ranges.
+#
+# = Examples
+#
+#  # create a thumbnail of size 100 pixels from pix.jpg, writes to 'output':
+#  > image_science thumbnail 100 pix.jpg
+#
+#  # as above, but create a png named pix_thumb.png:
+#  > image_science thumbnail 100 pix.jpg -o pix_thumb.png
+#
+#  # resize to 200x100, increase brightness by 30%, save as png:
+#  > image_science resize 200 100 pix.jpg | image_science adjust_brightness 30 -o pix_new.png
+#
+#  # display effects of gamma adjustments on pixel color (writes to 'output'):
+#  > image_science get_pixel_color 0 0 pix.jpg | image_science adjust_gamma 0.5 | image_science get_pixel_color 0 0
+
+require 'rubygems'
+require File.dirname(__FILE__) + '/../lib/image_science'
+require 'getoptlong'
+require 'rdoc/usage'
+
+ARG_SPEC = [ [ '--help', '-h', GetoptLong::NO_ARGUMENT ],
+             [ '--test', '-n', GetoptLong::NO_ARGUMENT ],
+             [ '--input', '-i', GetoptLong::REQUIRED_ARGUMENT ],
+             [ '--output', '-o', GetoptLong::REQUIRED_ARGUMENT ],
+             [ '--debug', '-d', GetoptLong::NO_ARGUMENT ],
+           ]
+
+private
+
+# parse command line arguments
+def command_line_options
+  opts = GetoptLong.new(*ARG_SPEC)
+  options = {}
+  opts.each do |opt,arg|
+    opt[0,2] = ''
+    opt = opt.to_sym
+    case opt
+    when :help
+      RDoc::usage
+    else
+      options[opt] = arg ? arg : true
+    end
+  end
+  options
+end
+
+def process_data(opts)
+  if input = opts[:input]
+    method = :with_image
+  else
+    method = :with_image_from_memory
+    input = STDIN.binmode.read
+  end
+
+  output = opts[:output] || ($stdout.tty? ? "output" : nil)
+
+  ImageScience.send(method, input) do |i|
+    yield i if block_given?
+    if @changed || !$stdout.tty? || opts[:output]
+      if output
+        i.save(output)
+      else
+        $stdout.sync = true
+        print i.data
+      end
+    end
+  end
+end
+
+def usage(bonus_args = nil)
+  ["usage: image_science #{@command}", bonus_args, "[image_file]"].
+    compact.join(" ")
+end
+
+begin
+  opts = command_line_options
+  @command, *params = ARGV
+  opts[:input] = params.pop if !opts[:input] && $stdin.tty?
+  params = params.collect { |i| i ? i.to_f : nil }
+
+  # Note: using warn for string output so that image data can be chained
+  # through on the command line.
+  case @command
+  when nil  # no command, just use -i and -o
+    process_data(opts)
+  when 'info'
+    process_data(opts) do |i|
+      warn <<EOM
+image type: #{i.image_type}
+dimensions: #{i.width} x #{i.height}
+colorspace: #{i.colorspace}
+     depth: #{i.depth}
+EOM
+    end
+  when 'histogram'
+    process_data(opts) { |i| warn i.histogram.inspect }
+  when 'get_version'
+    warn ImageScience.get_version
+  when 'resize'
+    w, h = *params
+    raise usage("<width> <height>") unless w && h
+    process_data(opts) { |i| i.send(@command, w, h); @changed = true }
+  when 'get_pixel_color'
+    x, y = *params
+    raise usage("<x> <y>") unless x && y
+    process_data(opts) { |i| warn i.get_pixel_color(x, y).inspect }
+  when /^adjust_/
+    value = params[0]
+    raise usage("<value>") unless value
+    process_data(opts) { |i| i.send(@command, value); @changed = true }
+  when 'invert'
+    process_data(opts) { |i| i.invert; @changed = true }
+  when 'thumbnail', 'cropped_thumbnail'
+    value = params[0]
+    raise usage("<size>") unless value
+    process_data(opts) { |i| i.send(@command, value); @changed = true }
+  when 'crop'
+    l, r, t, b = *params
+    raise usage("<left> <top> <right> <bottom>") unless l && t && r && b
+    process_data(opts) { |i| i.crop(l, r, t, b); @changed = true }
+  else
+    raise "unrecognised command '#{@command}'"
+  end
+
+rescue SystemExit
+rescue Exception => e
+  warn "ERROR: #{e.message}"
+  warn e.backtrace if opts && opts[:debug]
+end

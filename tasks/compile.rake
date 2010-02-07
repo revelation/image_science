@@ -4,6 +4,8 @@ EXT_DIR = File.dirname(__FILE__) + "/../ext"
 desc "compile the extension"
 task :compile do
   Dir.chdir(EXT_DIR)
-  system("/usr/bin/env ruby extconf.rb")
+  #require 'extconf'  # creates a Makefile with the wrong target...
+  system("ruby extconf.rb")
   system("make")
+  Dir.chdir("..")
 end

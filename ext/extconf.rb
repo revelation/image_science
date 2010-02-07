@@ -1,8 +1,7 @@
 require 'mkmf'
 
-# expand comments in image_science_ext.c.in and generate image_science_ext.c
+# expand comments in image_science_ext.c.in and generate image_science_ext.c.
 # creates constant definitions (rb_define_const)
-# based on mysql extconf.rb code.
 def expand_constants
 
   File.open("conftest.c", "w") { |f| f.puts "#include <FreeImage.h>" }
@@ -17,7 +16,7 @@ def expand_constants
     File.foreach("confout2") do |define|
       next unless define.match(/^\s*(\w+)\s*=\s*\d/)  # typedef
       name = $1
-      next unless name.match(/^(FIT|FICC|FIC|FIF)_/)
+      next unless name.match(/^(FIT|FICC|FIC|FIF|FILTER)_/)
       constants[$1] ||= []
       constants[$1] << name
     end
