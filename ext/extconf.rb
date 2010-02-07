@@ -48,7 +48,9 @@ end
 
 dir_config('freeimage')
 
-ok = have_header('FreeImage.h') && have_library('freeimage', 'FreeImage_Load')
+ok = have_header('FreeImage.h') &&
+  have_library('stdc++')  # sometimes required on OSX
+  have_library('freeimage', 'FreeImage_Load') &&
 
 if(ok)
   expand_constants
