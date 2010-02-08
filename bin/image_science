@@ -59,7 +59,6 @@
 require 'rubygems'
 require File.dirname(__FILE__) + '/../lib/image_science'
 require 'getoptlong'
-require 'rdoc/usage'
 
 ARG_SPEC = [ [ '--help', '-h', GetoptLong::NO_ARGUMENT ],
              [ '--test', '-n', GetoptLong::NO_ARGUMENT ],
@@ -79,7 +78,8 @@ def command_line_options
     opt = opt.to_sym
     case opt
     when :help
-      RDoc::usage
+      puts usage("[param ...]")
+      exit 0
     else
       options[opt] = arg ? arg : true
     end
@@ -111,15 +111,36 @@ def process_data(opts)
 end
 
 def usage(bonus_args = nil)
-  ["usage: image_science #{@command}", bonus_args, "[image_file]"].
+  cmd = @command || "[command]"
+  usage = ["usage: image_science [OPTIONS]", cmd, bonus_args, "[image_file]"].
     compact.join(" ")
+  
+  if !@command
+    re = Regexp.new('== Commands(.*?)= Examples', Regexp::MULTILINE)
+    commands = $1.gsub(/#/, '') if File.read(__FILE__).match(re)
+    usage += commands.sub(/[\n\s]+\z/, '') + "\n\n"
+  end
+  
+  usage
+end
+
+def expect_params(param_format)
+  unless @params.length == param_format.length || @params.any? { |i| i.nil? }
+    raise usage(param_format.join(" "))
+  end
+  @params
 end
 
 begin
   opts = command_line_options
   @command, *params = ARGV
   opts[:input] = params.pop if !opts[:input] && $stdin.tty?
-  params = params.collect { |i| i ? i.to_f : nil }
+  @params = params.collect { |i| i ? i.to_f : nil }
+
+  unless @command || (opts[:input] || opts[:output])
+    puts usage("[param ...]")
+    exit 1
+  end
 
   # Note: using warn for string output so that image data can be chained
   # through on the command line.
@@ -138,34 +159,31 @@ EOM
   when 'histogram'
     process_data(opts) { |i| warn i.histogram.inspect }
   when 'get_version'
-    warn ImageScience.get_version
+    warn "FreeImage #{ImageScience.get_version}"
   when 'resize'
-    w, h = *params
-    raise usage("<width> <height>") unless w && h
+    w, h = expect_params(%W{<width> <height>})
     process_data(opts) { |i| i.send(@command, w, h); @changed = true }
   when 'get_pixel_color'
-    x, y = *params
-    raise usage("<x> <y>") unless x && y
+    x, y = expect_params(%W{<x> <y>})
     process_data(opts) { |i| warn i.get_pixel_color(x, y).inspect }
   when /^adjust_/
-    value = params[0]
-    raise usage("<value>") unless value
+    value = expect_params("<value>")
     process_data(opts) { |i| i.send(@command, value); @changed = true }
   when 'invert'
     process_data(opts) { |i| i.invert; @changed = true }
   when 'thumbnail', 'cropped_thumbnail'
-    value = params[0]
-    raise usage("<size>") unless value
+    value = expect_params("<size>")
     process_data(opts) { |i| i.send(@command, value); @changed = true }
   when 'crop'
-    l, r, t, b = *params
-    raise usage("<left> <top> <right> <bottom>") unless l && t && r && b
+    l, r, t, b = expect_params(%W{<left> <top> <right> <bottom>})
     process_data(opts) { |i| i.crop(l, r, t, b); @changed = true }
   else
     raise "unrecognised command '#{@command}'"
   end
 
 rescue SystemExit
+rescue Interrupt
+  warn ""
 rescue Exception => e
   warn "ERROR: #{e.message}"
   warn e.backtrace if opts && opts[:debug]

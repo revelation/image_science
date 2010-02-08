@@ -4,6 +4,7 @@
 tmp/**/* 
 ext/Makefile
 ext/image_science_ext.c
+ext/image_science_ext.bundle
 *.o
 *.so
 mkmf.log
