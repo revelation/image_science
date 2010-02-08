@@ -37,6 +37,13 @@ class ImageScience
   end
 
   ##
+  # alias for buffer()
+
+  def data(*args)
+    buffer(*args)
+  end
+
+  ##
   # call-seq:
   #   thumbnail(size)
   #   thumbnail(size) { |image| ... }
@@ -87,7 +94,36 @@ class ImageScience
     end
   end
 
-  private
+  ##
+  # resize the image to fit within the max_w and max_h passed in without
+  # changing the aspect ratio of the original image. If a block is given,
+  # yields the new image, else returns true on success.
+
+  def fit_within(max_w, max_h)
+    w, h = width, height
+
+    if w > max_w.to_i or h > max_h.to_i
+
+      w_ratio = max_w.quo(w)
+      h_ratio = max_h.quo(h)
+
+      if (w_ratio < h_ratio)
+        h = (h * w_ratio)
+        w = (w * w_ratio)
+      else
+        h = (h * h_ratio)
+        w = (w * h_ratio)
+      end
+    end
+
+    if block_given?
+      self.resize(w, h) do |image|
+        yield image
+      end
+    else
+      self.resize(w, h)
+    end
+  end
 
   def self.fif_to_string(fif)
     file_types = %W{BMP ICO JPEG JNG KOALA IFF MNG PBM PBMRAW PCD PCX PGM

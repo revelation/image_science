@@ -125,10 +125,11 @@ def usage(bonus_args = nil)
 end
 
 def expect_params(param_format)
+  param_format = [param_format] unless param_format.kind_of?(Array)
   unless @params.length == param_format.length || @params.any? { |i| i.nil? }
     raise usage(param_format.join(" "))
   end
-  @params
+  (@params.length == 1) ? @params[0] : @params
 end
 
 begin
@@ -186,5 +187,9 @@ rescue Interrupt
   warn ""
 rescue Exception => e
   warn "ERROR: #{e.message}"
-  warn e.backtrace if opts && opts[:debug]
+  if opts && opts[:debug]
+    bt = e.backtrace
+    bt = bt.join("\n") if bt.kind_of?(Array)
+    warn bt
+  end
 end

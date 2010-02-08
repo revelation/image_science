@@ -20,6 +20,7 @@ VALUE isc_image_formats; /* ImageScience::ImageFormats module */
 VALUE isc_image_filters; /* ImageScience::ImageFilters module */
 VALUE isc_color_chan;    /* ImageScience::ColorChannels module */
 VALUE isc_color_types;   /* ImageScience::ColorTypes module */
+VALUE isc_ls_flags;      /* ImageScience::LoadSaveFlags module */
 
 static VALUE unload(VALUE self) {
   FIBITMAP *bitmap;
@@ -56,6 +57,29 @@ static void FreeImageErrorHandler(FREE_IMAGE_FORMAT fif, const char *message) {
 	   message);
 }
 
+/****** helper functions ****/
+
+/*
+ * Prepare the given bitmap for saving in the specified format.
+ * If a new bitmap is required, returns a bitmap, else returns NULL.
+ */
+static FIBITMAP *
+_prepare_bitmap_for_save(FIBITMAP *bitmap, FREE_IMAGE_FORMAT fif)
+{
+  FIBITMAP *new_bitmap = NULL;
+
+  if (fif == FIF_PNG) FreeImage_DestroyICCProfile(bitmap);
+
+  if (fif == FIF_JPEG && FreeImage_GetBPP(bitmap) != 24) {
+    new_bitmap = FreeImage_ConvertTo24Bits(bitmap);
+  }
+  if (fif == FIF_GIF && FreeImage_GetBPP(bitmap) != 8) {
+    new_bitmap = FreeImage_ConvertTo8Bits(bitmap);
+  }
+
+  return new_bitmap;
+}
+
 /****** Class methods ******/
 
 /*
@@ -70,7 +94,7 @@ static VALUE with_image(VALUE klass, VALUE filename) {
   char *input = RSTRING(filename)->ptr;
   struct stat buf;
 
-  if(stat(input, &buf)) rb_raise(rb_eTypeError, "file not found");
+  if (stat(input, &buf)) rb_raise(rb_eTypeError, "file not found");
 
   fif = FreeImage_GetFileType(input, 0);
   if (fif == FIF_UNKNOWN) fif = FreeImage_GetFIFFromFilename(input);
@@ -163,93 +187,68 @@ static VALUE file_type(VALUE self, VALUE filename) {
 
 /*********** Instance methods ***********/
 
-static unsigned _data_write(void *buffer, unsigned size, unsigned count, fi_handle handle) {
-  VALUE self = (VALUE)handle;
-  VALUE data = rb_iv_get(self, "@data");
-  VALUE pos = rb_iv_get(self, "@data_pos");
-  long current_pos = FIX2INT(pos);
-  long end_pos = current_pos + size * count;
-
-  //fprintf(stderr, "in _data_write: pos=%ld, size=%d, count=%d\n", current_pos, size, count);
-  
-  if(end_pos > RSTRING(data)->len) {
-    rb_str_resize(data, end_pos);
-  }
-  memcpy(RSTRING(data)->ptr + current_pos, buffer, size * count);
-  rb_iv_set(self, "@data_pos", INT2FIX(end_pos));
-  return count;
-}
-
-static long _data_tell(fi_handle handle) {
-  //fprintf(stderr, "in _data_tell\n");
-  return FIX2INT(rb_iv_get((VALUE) handle, "@data_pos"));
-}
-
-/* tif writer calls read during a write... */
-static unsigned _data_read(void *buffer, unsigned size, unsigned count, fi_handle handle) {
-  VALUE self = (VALUE)handle;
-  VALUE data = rb_iv_get(self, "@data");
-  VALUE pos = rb_iv_get(self, "@data_pos");
-  long current_pos = FIX2INT(pos);
-  long read_length = size * count;
-
-  //fprintf(stderr, "in _data_read: pos=%ld, size=%d, count=%d\n", current_pos, size, count);
-
-  if(current_pos + read_length > RSTRING(data)->len)
-    read_length = RSTRING(data)->len - current_pos;
-
-  memcpy(buffer, RSTRING(data)->ptr + current_pos, read_length);
-  return read_length;
-}
-
-static int _data_seek(fi_handle handle, long offset, int origin) {
-  long new_pos = 0;
-  VALUE data;
-
-  //fprintf(stderr, "in _data_seek: offset = %ld, origin = %d\n", offset, origin);
-  switch(origin) {
-  case SEEK_SET:
-    new_pos = offset;
-    break;
-  case SEEK_CUR:
-    new_pos = _data_tell(handle) + offset;
-    break;
-  case SEEK_END:
-    data = rb_iv_get((VALUE) handle, "@data");
-    new_pos = RSTRING(data)->len + offset;
-  }
-
-  rb_iv_set((VALUE) handle, "@data_pos", INT2FIX(new_pos));
-  return 1;  /* success */
-}
-
 /*
- * Returns the image data as a string.
+ * call-seq:
+ *   buffer()
+ *   buffer() { |string| ... }
+ *   buffer(format, flags = 0)
+ *   buffer(format, flags = 0) { |string| ... }
+ *
+ * Returns the image in a buffer (String). Optionally accepts a file
+ * format argument to convert the image to the specified format (see
+ * ImageScience::ImageFormats).  If +format+ is nil, buffer() uses the
+ * current file format of the image (the default).  +flags+ is optional
+ * flags to send to the writer plugin (see ImageScience::LoadSaveFlags).
  */
-static VALUE data(VALUE self) {
-  FIBITMAP *bitmap;
-  int flags = 0;
-  FREE_IMAGE_FORMAT fif;
+static VALUE buffer(int argc, VALUE *argv, VALUE self) {
   VALUE str = Qnil;
-  int ok;
-  FreeImageIO io;
+  int flags;
+  FIBITMAP *bitmap, *new_bitmap;
+  FIMEMORY *mem = NULL;
+  long file_size;
+  BYTE *mem_buffer = NULL; 
+  DWORD size_in_bytes = 0;
+  char message[1024];
+  FREE_IMAGE_FORMAT fif;
+  BOOL result = 0;
+  VALUE fif_arg, flags_arg;  /* optional argument */
+
+  /* parse optional arguments: fif and flags */
+  rb_scan_args(argc, argv, "02", &fif_arg, &flags_arg);
+  if(NIL_P(fif_arg)) fif_arg = rb_iv_get(self, "@file_type");
+  fif = NIL_P(fif_arg) ? FIF_UNKNOWN : FIX2INT(fif_arg);
+  flags = NIL_P(flags_arg) ? 0 : FIX2INT(flags_arg);
+
+  if ((fif == FIF_UNKNOWN) || !FreeImage_FIFSupportsWriting(fif)) {
+    snprintf(message, 1023, "Unknown file format: %d", fif);
+    rb_raise(rb_eTypeError, message);
+  }
 
   GET_BITMAP(bitmap);
-  fif = FIX2INT(rb_iv_get(self, "@file_type"));
 
-  io.read_proc = _data_read;
-  io.write_proc = _data_write;
-  io.seek_proc = _data_seek;
-  io.tell_proc = _data_tell;
+  // create a memory stream and save to it 
+  new_bitmap = _prepare_bitmap_for_save(bitmap, fif);
+  mem = FreeImage_OpenMemory(0,0);
+  result = FreeImage_SaveToMemory(fif, new_bitmap ? new_bitmap : bitmap, mem, flags);
 
-  str = rb_str_new2("");
-  rb_iv_set(self, "@data_pos", INT2FIX(0));
-  rb_iv_set(self, "@data", str);
-  ok = FreeImage_SaveToHandle(fif, bitmap, &io, (fi_handle)self, flags);
-  str = rb_iv_get(self, "@data");
-  rb_iv_set(self, "@data", Qnil);
+  if(result) {
+    // get the buffer from the memory stream
+    FreeImage_AcquireMemory(mem, &mem_buffer, &size_in_bytes);
 
-  return str;
+    // convert to ruby string
+    str = rb_str_new((char *) mem_buffer, size_in_bytes);
+  }
+
+  // clean up
+  if(new_bitmap) FreeImage_Unload(new_bitmap);
+  FreeImage_CloseMemory(mem); 
+
+  // yield the string, or return it
+  if (rb_block_given_p()) {
+    rb_yield(str);
+  } else {
+    return str;
+  }
 }
 
 /*
@@ -392,7 +391,7 @@ static VALUE resize(int argc, VALUE *argv, VALUE self) {
 static VALUE save(VALUE self, VALUE filename) {
   int flags;
   char * output = RSTRING(filename)->ptr;
-  FIBITMAP *bitmap;
+  FIBITMAP *bitmap, *new_bitmap;
   FREE_IMAGE_FORMAT fif = FreeImage_GetFIFFromFilename(output);
   if (fif == FIF_UNKNOWN) fif = FIX2INT(rb_iv_get(self, "@file_type"));
   if ((fif != FIF_UNKNOWN) && FreeImage_FIFSupportsWriting(fif)) {
@@ -400,18 +399,9 @@ static VALUE save(VALUE self, VALUE filename) {
     flags = fif == FIF_JPEG ? JPEG_QUALITYSUPERB : 0;
     BOOL result = 0, unload = 0;
     
-    if (fif == FIF_PNG) FreeImage_DestroyICCProfile(bitmap);
-    if (fif == FIF_JPEG && FreeImage_GetBPP(bitmap) != 24) {
-      bitmap = FreeImage_ConvertTo24Bits(bitmap);
-      unload = 1; // sue me
-    }
-    if(fif == FIF_GIF && FreeImage_GetBPP(bitmap) != 8) {
-      bitmap = FreeImage_ConvertTo8Bits(bitmap);
-      unload = 1;  // ditto
-    }
-    result = FreeImage_Save(fif, bitmap, output, flags);
-    
-    if (unload) FreeImage_Unload(bitmap);
+    new_bitmap = _prepare_bitmap_for_save(bitmap, fif);
+    result = FreeImage_Save(fif, new_bitmap ? new_bitmap : bitmap, output, flags);
+    if(new_bitmap) FreeImage_Unload(new_bitmap);
 
     return result ? Qtrue : Qfalse;
   }
@@ -563,7 +553,7 @@ void Init_image_science_ext(void)
   rb_define_method(isc, "adjust_contrast", adjust_contrast, 1);
   rb_define_method(isc, "invert", invert, 0);
   rb_define_method(isc, "histogram", histogram, -1);  /* variable args */
-  rb_define_method(isc, "data", data, 0);
+  rb_define_method(isc, "buffer", buffer, -1);
 
   /* FREE_IMAGE_TYPE constants */
   isc_image_types = rb_define_module_under(isc, "ImageTypes");
@@ -584,6 +574,10 @@ void Init_image_science_ext(void)
   /* IMAGE_FILTER constants */
   isc_image_filters = rb_define_module_under(isc, "ImageFilters");
   /* expand FreeImage constants isc_image_filters FILTER */
+
+  /* load/save flag constants */
+  isc_ls_flags = rb_define_module_under(isc, "LoadSaveFlags");
+  /* expand FreeImage constants isc_ls_flags FLAG */
 
   FreeImage_SetOutputMessage(FreeImageErrorHandler);
 }

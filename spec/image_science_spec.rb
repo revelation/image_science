@@ -2,6 +2,7 @@ require File.dirname(__FILE__) + '/../lib/image_science'
 
 include ImageScience::ColorChannels
 include ImageScience::ImageFilters
+include ImageScience::ImageFormats
 
 describe ImageScience do
 
@@ -145,17 +146,85 @@ describe ImageScience do
         
       end
 
-      describe "data" do
+      describe "buffer" do
         it "should return image data" do
           ImageScience.with_image image_path(ext) do |img|
             expected = File.size(image_path(ext))
             tolerance = expected * 0.05
 
-            data = img.data
+            data = img.buffer
             data.should_not be_nil
             #data.length.should be_close(expected, tolerance)
           end
         end
+
+        it "should yield image data" do
+          ImageScience.with_image image_path(ext) do |img|
+            expected = File.size(image_path(ext))
+            tolerance = expected * 0.05
+
+            img.buffer do |data|
+              data.should_not be_nil
+              #data.length.should be_close(expected, tolerance)
+            end
+          end
+        end
+
+        it "should return image data in the given format" do
+          ImageScience.with_image image_path(ext) do |img|
+            [FIF_BMP, FIF_GIF, FIF_JPEG, FIF_PNG].each do |target_format|
+              data = img.buffer(target_format)
+              data.should_not be_nil
+            end
+          end
+        end
+
+        # TODO: convert to use constants
+        it "should accept save flags" do
+          ImageScience.with_image image_path(ext) do |img|
+            jpg_large = img.buffer(FIF_JPEG, 0x80)  # jpeg quality superb
+            jpg_small = img.buffer(FIF_JPEG, 0x08)  # jpeg quality bad
+            jpg_small.length.should < jpg_large.length
+          end
+        end
+
+      end
+
+      describe "fit_within" do
+
+        it "should resize image to fit within given dimensions (yield)" do
+          # 50 x 50 image -> shrink to 20, 50 -> 20, 20
+          ImageScience.with_image image_path(ext) do |img|
+            img.fit_within(20, 50) do |thumb|
+              thumb.width.should == 20
+              thumb.height.should == 20
+            end
+          end
+        end
+
+        it "should resize image to fit within given dimensions (inline)" do
+          # 50 x 50 image -> shrink to 20, 50 -> 20, 20
+          ImageScience.with_image image_path(ext) do |img|
+            img.fit_within(20, 50)
+            img.width.should == 20
+            img.height.should == 20
+          end
+
+          # 100 x 50 image -> shrink to 50, 100 -> 50, 25
+          ImageScience.with_image image_path(ext, "pix2") do |img|
+            img.fit_within(50, 100)
+            img.width.should == 50
+            img.height.should == 25
+          end
+
+          # 100 x 50 image -> shrink to 150, 25 -> 50, 25
+          ImageScience.with_image image_path(ext, "pix2") do |img|
+            img.fit_within(150, 25)
+            img.width.should == 50
+            img.height.should == 25
+          end
+        end
+
       end
       
       describe "get_pixel_color" do
