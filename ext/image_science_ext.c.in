@@ -405,6 +405,10 @@ static VALUE save(VALUE self, VALUE filename) {
       bitmap = FreeImage_ConvertTo24Bits(bitmap);
       unload = 1; // sue me
     }
+    if(fif == FIF_GIF && FreeImage_GetBPP(bitmap) != 8) {
+      bitmap = FreeImage_ConvertTo8Bits(bitmap);
+      unload = 1;  // ditto
+    }
     result = FreeImage_Save(fif, bitmap, output, flags);
     
     if (unload) FreeImage_Unload(bitmap);
