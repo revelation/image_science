@@ -9,19 +9,39 @@ def expand_constants
   system "#{cpp} > confout"
 
   constants = {}
+  headers = []
 
-  File.foreach("confout") do |includes|
-    next unless includes.match(/"(.*?FreeImage.h)"/)
-    system "#{cpp} > confout2"
-    File.foreach("confout2") do |define|
-      next unless define.match(/^\s*(\w+)\s*=\s*\d/)  # typedef
-      name = $1
-      next unless name.match(/^(FIT|FICC|FIC|FIF|FILTER)_/)
-      constants[$1] ||= []
-      constants[$1] << name
+  config = File.readlines("confout")
+  config.each do |include|
+    next unless include.match(/"(.*?FreeImage.h)"/)
+    filename = include.split('"')[1]
+    headers << filename
+  end
+  
+  headers.uniq!
+
+  # add typedef constants
+  config.each do |define|
+    next unless define.match(/^\s*(\w+)\s*=\s*\d/)  # typedef
+    name = $1
+    next unless name.match(/^(FIT|FICC|FIC|FIF|FILTER)_/)
+    constants[$1] ||= []
+    constants[$1] << [name]
+  end
+
+  raw_headers = headers.collect { |i| File.read(i) }.join
+  
+  # add #defined constants (load/save flags)
+  constants['FLAG'] ||= []
+  flag_defines = raw_headers.scan(/(flag constants\s*---.*?)^\/\//m)
+  flag_defines.each do |flag_data|
+    flag_data[0].split(/\n/).each do |define|
+      next unless define.match(/^\#define\s*(\w+)\s(.*?(\/\/.+)$)?/)  # #define
+      constants['FLAG'] << [$1, $3]
     end
   end
-  File.unlink("confout", "confout2")
+
+  File.unlink("confout")
 
   constants.keys.each { |i| constants[i].uniq! }
 
@@ -35,7 +55,14 @@ def expand_constants
           puts "warning: no constants found matching #{const_type}"
           next
         end
-        const_list.each do |c|
+        const_list.each do |c, comment|
+          if comment
+            comment.sub!('//', '')
+            comment.sub!(/[\r\n]+$/, '')
+            comment.gsub!(/:/, '-')  # colons break rdoc..
+            comment.strip!
+            newf.puts %Q{  /* #{comment} */}
+          end
           newf.puts %Q{  rb_define_const(#{klass_name}, "#{c}", INT2FIX(#{c}));}
         end
       else
@@ -49,8 +76,8 @@ end
 dir_config('freeimage')
 
 ok = have_header('FreeImage.h') &&
-  have_library('stdc++')  # sometimes required on OSX
-  have_library('freeimage', 'FreeImage_Load') &&
+  have_library('stdc++') && # sometimes required on OSX
+  have_library('freeimage', 'FreeImage_Load')
 
 if(ok)
   expand_constants
