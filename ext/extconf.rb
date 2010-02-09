@@ -80,6 +80,8 @@ ok = have_header('FreeImage.h') &&
   have_library('freeimage', 'FreeImage_Load')
 
 if(ok)
+  have_func('FreeImage_Rotate')
+  have_func('FreeImage_RotateClassic')
   expand_constants
   create_makefile("image_science_ext")
 end

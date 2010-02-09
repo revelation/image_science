@@ -23,6 +23,10 @@
 # by default output is written to stdout, or a file named 'output'
 # if stdout is attached to a tty.
 #
+# -d, --debug:
+#
+# debug mode
+#
 # == Commands
 #
 # The following commands are recognised
@@ -39,6 +43,9 @@
 # * invert
 # * thumbnail <size>
 # * cropped_thumbnail <size>
+# * flip_vertical
+# * flip_horizontal
+# * rotate <angle> [<x_shift> <y_shift> <x_origin> <y_origin> <use_mask>]
 #
 # Refer to the ImageScience documentation for allowed value ranges.
 #
@@ -124,10 +131,15 @@ def usage(bonus_args = nil)
   usage
 end
 
-def expect_params(param_format)
-  param_format = [param_format] unless param_format.kind_of?(Array)
-  unless @params.length == param_format.length || @params.any? { |i| i.nil? }
-    raise usage(param_format.join(" "))
+def expect_params(required, optional = [])
+  required = [required] unless required.kind_of?(Array)
+  pl = @params.length
+  
+  if (pl < required.length) || (pl > required.length + optional.length) ||
+      @params.any? { |i| i.nil? }
+    usage_str = required.join(" ")
+    usage_str += " [%s]" % optional.join(" ") unless optional.empty?
+    raise usage(usage_str)
   end
   (@params.length == 1) ? @params[0] : @params
 end
@@ -170,14 +182,21 @@ EOM
   when /^adjust_/
     value = expect_params("<value>")
     process_data(opts) { |i| i.send(@command, value); @changed = true }
-  when 'invert'
-    process_data(opts) { |i| i.invert; @changed = true }
+  when 'invert', 'flip_vertical', 'flip_horizontal'
+    process_data(opts) { |i| i.send(@command); @changed = true }
   when 'thumbnail', 'cropped_thumbnail'
     value = expect_params("<size>")
     process_data(opts) { |i| i.send(@command, value); @changed = true }
   when 'crop'
     l, r, t, b = expect_params(%W{<left> <top> <right> <bottom>})
     process_data(opts) { |i| i.crop(l, r, t, b); @changed = true }
+  when 'rotate'
+    a, *args = expect_params("<angle>", %W{<x_shift> <y_shift> <x_origin>
+                                           <y_origin> <use_mask>})
+    process_data(opts) do |i|
+      args.empty? ? i.rotate(a) : i.rotate(a, *args)
+      @changed = true
+    end
   else
     raise "unrecognised command '#{@command}'"
   end

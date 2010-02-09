@@ -14,6 +14,12 @@
 #define GET_BITMAP(name) Data_Get_Struct(self, FIBITMAP, (name)); if (!(name)) rb_raise(rb_eTypeError, "Bitmap has already been freed")
 #define RB_BOOL(value) (value ? Qtrue : Qfalse)
 
+#ifdef HAVE_FREEIMAGE_ROTATE
+#define ROTATE(bitmap, angle) FreeImage_Rotate(bitmap, angle)
+#else
+#define ROTATE(bitmap, angle) FreeImage_RotateClassic(bitmap, angle)
+#endif
+
 VALUE isc;               /* ImageScience class */
 VALUE isc_image_types;   /* ImageScience::ImageTypes module */
 VALUE isc_image_formats; /* ImageScience::ImageFormats module */
@@ -93,38 +99,44 @@ static VALUE with_image(VALUE klass, VALUE filename) {
   int flags;
   char *input = RSTRING(filename)->ptr;
   struct stat buf;
+  FIBITMAP *bitmap, *new_bitmap;
+  VALUE result = Qnil;
 
   if (stat(input, &buf)) rb_raise(rb_eTypeError, "file not found");
 
   fif = FreeImage_GetFileType(input, 0);
   if (fif == FIF_UNKNOWN) fif = FreeImage_GetFIFFromFilename(input);
-  if ((fif != FIF_UNKNOWN) && FreeImage_FIFSupportsReading(fif)) {
-    FIBITMAP *bitmap;
-    VALUE result = Qnil;
-    flags = fif == FIF_JPEG ? JPEG_ACCURATE : 0;
-    bitmap = FreeImage_Load(fif, input, flags);
-    if (bitmap) {
-      FITAG *tagValue = NULL;
-      FreeImage_GetMetadata(FIMD_EXIF_MAIN, bitmap, "Orientation", &tagValue); 
-      switch (tagValue == NULL ? 0 : *((short *) FreeImage_GetTagValue(tagValue))) {
-      case 6:
-	bitmap = FreeImage_RotateClassic(bitmap, 270);
-	break;
-      case 3:
-	bitmap = FreeImage_RotateClassic(bitmap, 180);
-	break;
-      case 8:
-	bitmap = FreeImage_RotateClassic(bitmap, 90);
-	break;
-      default:
-	break;
-      }
-
-      result = wrap_and_yield(bitmap, klass, fif);
-    }
-    return result;
+  if ((fif == FIF_UNKNOWN) || !FreeImage_FIFSupportsReading(fif)) {
+    rb_raise(rb_eTypeError, "Unknown file format");
   }
-  rb_raise(rb_eTypeError, "Unknown file format");
+
+  flags = fif == FIF_JPEG ? JPEG_ACCURATE : 0;
+  bitmap = FreeImage_Load(fif, input, flags);
+
+  if (bitmap) {
+    FITAG *tagValue = NULL;
+    double angle = 0;
+
+    FreeImage_GetMetadata(FIMD_EXIF_MAIN, bitmap, "Orientation", &tagValue); 
+
+    switch (tagValue == NULL ? 0 : *((short *) FreeImage_GetTagValue(tagValue))) {
+    case 6:
+      angle = 270; break;
+    case 3:
+      angle = 180; break;
+    case 8:
+      angle = 90; break;
+    }
+
+    if (angle) {
+      new_bitmap = ROTATE(bitmap, angle);
+      FreeImage_Unload(bitmap);
+      bitmap = new_bitmap;
+    }
+    
+    result = wrap_and_yield(bitmap, klass, fif);
+  }
+  return result;
 }
 
 /*
@@ -205,7 +217,6 @@ static VALUE buffer(int argc, VALUE *argv, VALUE self) {
   int flags;
   FIBITMAP *bitmap, *new_bitmap;
   FIMEMORY *mem = NULL;
-  long file_size;
   BYTE *mem_buffer = NULL; 
   DWORD size_in_bytes = 0;
   char message[1024];
@@ -244,11 +255,9 @@ static VALUE buffer(int argc, VALUE *argv, VALUE self) {
   FreeImage_CloseMemory(mem); 
 
   // yield the string, or return it
-  if (rb_block_given_p()) {
-    rb_yield(str);
-  } else {
-    return str;
-  }
+  if (rb_block_given_p()) rb_yield(str);
+
+  return str;
 }
 
 /*
@@ -397,7 +406,7 @@ static VALUE save(VALUE self, VALUE filename) {
   if ((fif != FIF_UNKNOWN) && FreeImage_FIFSupportsWriting(fif)) {
     GET_BITMAP(bitmap);
     flags = fif == FIF_JPEG ? JPEG_QUALITYSUPERB : 0;
-    BOOL result = 0, unload = 0;
+    BOOL result = 0;
     
     new_bitmap = _prepare_bitmap_for_save(bitmap, fif);
     result = FreeImage_Save(fif, new_bitmap ? new_bitmap : bitmap, output, flags);
@@ -527,6 +536,99 @@ static VALUE histogram(int argc, VALUE *argv, VALUE self) {
   return ret;
 }
 
+static VALUE _flip(VALUE self, BOOL (*flip_func)(FIBITMAP *)) {
+  FIBITMAP *bitmap, *new_bitmap;
+  BOOL result;
+
+  GET_BITMAP(bitmap);
+  if(rb_block_given_p()) {
+    new_bitmap = FreeImage_Clone(bitmap);
+    (*flip_func)(new_bitmap);
+    return wrap_and_yield(new_bitmap, self, 0);
+  } else {
+    result = (*flip_func)(bitmap);
+    return result ? Qtrue : Qfalse;
+  }
+}
+
+/* Flip the image horizontally along the vertical axis. */
+static VALUE flip_horizontal(VALUE self) {
+  return _flip(self, FreeImage_FlipHorizontal);
+}
+
+/* Flip the image vertically along the horizontal axis. */
+static VALUE flip_vertical(VALUE self) {
+  return _flip(self, FreeImage_FlipVertical);
+}
+
+/*
+ * call-seq:
+ *   rotate(angle)
+ *   rotate(angle, x_shift, y_shift, x_origin, y_origin, use_mask = true)
+ * 
+ * Perform a rotation and / or translation of an image.
+ * 
+ * The first form rotates an image by means of 3 shears. The angle of
+ * rotation is specified by the +angle+ parameter in degrees. Rotation
+ * occurs around the center of the image area.  The image retains the
+ * size and aspect ratio of the source image.
+ *
+ * The second form uses a 3rd order (cubic) B-Spline. The rotated
+ * image will have the same width and height as the source image.  The
+ * angle of rotation is specified by the +angle+ parameter in
+ * degrees. Horizontal and vertical image translations (in pixel
+ * units) are specified by the +x_shift+ and +y_shift+
+ * parameters. Rotation occurs around the center specified by
+ * +x_origin+ and +y_origin+, also given in pixel units. When
+ * +use_mask+ is set to TRUE, the irrelevant part of the image is set
+ * to a black color, otherwise, a mirroring technique is used to fill
+ * irrelevant pixels.
+ *
+ */
+static VALUE rotate(int argc, VALUE *argv, VALUE self) {
+  FIBITMAP *bitmap, *new_bitmap;
+  VALUE angle, x_shift, y_shift, x_origin, y_origin, use_mask;
+  BOOL mask;
+
+  rb_scan_args(argc, argv, "15", &angle, &x_shift, &y_shift,
+	       &x_origin, &y_origin, &use_mask);
+
+  GET_BITMAP(bitmap);
+
+  if(FreeImage_GetBPP(bitmap) == 16) {
+    /* can't rotate 16 bit images - convert to 24 bit */
+    new_bitmap = FreeImage_ConvertTo24Bits(bitmap);
+    unload(self);
+    DATA_PTR(self) = bitmap = new_bitmap;
+  }
+
+  if (argc == 1) {
+    /* first form - use Rotate */
+    new_bitmap = ROTATE(bitmap, NUM2DBL(angle));
+  }
+  else if (argc == 5 || argc == 6) {
+    /* second form - use RotateEx */
+    mask = NIL_P(use_mask) ? 0 : FIX2INT(use_mask);
+    new_bitmap = FreeImage_RotateEx
+      (bitmap, NUM2DBL(angle), NUM2DBL(x_shift), NUM2DBL(y_shift),
+       NUM2DBL(x_origin), NUM2DBL(y_origin), mask);
+  }
+  else {
+    rb_raise(rb_eArgError, "wrong number of arguments");
+  }
+  if (!new_bitmap) return Qfalse;
+
+  /* TODO: convert back to 16 bit? */
+
+  if (rb_block_given_p()) {
+    return wrap_and_yield(new_bitmap, self, 0);
+  } else {
+    unload(self);
+    DATA_PTR(self) = new_bitmap;
+    return Qtrue;
+  }
+}
+
 /* -- initialiser ---- */
 
 void Init_image_science_ext(void)
@@ -554,6 +656,9 @@ void Init_image_science_ext(void)
   rb_define_method(isc, "invert", invert, 0);
   rb_define_method(isc, "histogram", histogram, -1);  /* variable args */
   rb_define_method(isc, "buffer", buffer, -1);
+  rb_define_method(isc, "flip_horizontal", flip_horizontal, 0);
+  rb_define_method(isc, "flip_vertical", flip_vertical, 0);
+  rb_define_method(isc, "rotate", rotate, -1);
 
   /* FREE_IMAGE_TYPE constants */
   isc_image_types = rb_define_module_under(isc, "ImageTypes");

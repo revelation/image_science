@@ -6,7 +6,7 @@ include ImageScience::ImageFormats
 
 describe ImageScience do
 
-  FILE_TYPES = %W{png jpg gif bmp tif}
+  FILE_TYPES = %W{png jpg gif bmp tif xpm}
 
   before(:each) do
     @path = 'spec/fixtures'
@@ -234,7 +234,8 @@ describe ImageScience do
             :png => [[62, 134, 121], [1, 2, 2]],
             :gif => [[59, 135, 119], [0, 2, 0]],
             :bmp => [[62, 134, 121], [1, 2, 2]],
-            :tif => [[62, 134, 121], [1, 2, 2]]
+            :tif => [[62, 134, 121], [1, 2, 2]],
+            :xpm => [[255, 255, 255], [0, 0, 0]]
           }
 
           ImageScience.with_image image_path(ext) do |img|
@@ -321,7 +322,8 @@ describe ImageScience do
           'jpg' => 'JPEG',
           'png' => 'PNG',
           'bmp' => 'BMP',
-          'tif' => 'TIFF'
+          'tif' => 'TIFF',
+          'xpm' => 'XPM'
         }
         it "should return the image type (class method)" do
           ImageScience.image_type(image_path(ext)).should == expected[ext]
@@ -342,7 +344,8 @@ describe ImageScience do
             'jpg' => 'RGB',
             'png' => 'RGB',
             'bmp' => 'RGB',
-            'tif' => 'RGB'
+            'tif' => 'RGB',
+            'xpm' => 'Indexed'
           }
           ImageScience.with_image image_path(ext) do |img|
             img.colorspace.should == expected[ext]
@@ -357,7 +360,8 @@ describe ImageScience do
             'jpg' => 24,
             'png' => 24,
             'bmp' => 24,
-            'tif' => 24
+            'tif' => 24,
+            'xpm' => 8
           }
           ImageScience.with_image image_path(ext) do |img|
             img.depth.should == expected[ext]
@@ -417,6 +421,48 @@ describe ImageScience do
               h.should be_kind_of(Array)
               h.length.should == 256
             end
+          end
+        end
+      end
+
+      describe "rotate" do
+
+        # test Rotate
+        it "should rotate the image 90 degrees" do
+          ImageScience.with_image image_path(ext, "pix2") do |img|
+            w, h = img.width, img.height
+            img.rotate(90)
+            # width & height reversed
+            img.width.should == h
+            img.height.should == w
+          end
+        end
+
+        # test RotateEx
+        it "should rotate the image 120 degrees about an origin" do
+          ImageScience.with_image image_path(ext, "pix2") do |img|
+            w, h = img.width, img.height
+            img.rotate(120, 0, 0, 20, 20)
+            # width & height unchanged
+            img.width.should == w
+            img.height.should == h
+          end          
+        end
+
+      end
+
+      describe "flip_horizontal" do
+        it "should flip the image horizontally" do
+          ImageScience.with_image image_path(ext) do |img|          
+            img.flip_horizontal.should be_true
+          end
+        end
+      end
+
+      describe "flip_vertical" do
+        it "should flip the image vertically" do
+          ImageScience.with_image image_path(ext) do |img|          
+            img.flip_vertical.should be_true
           end
         end
       end
