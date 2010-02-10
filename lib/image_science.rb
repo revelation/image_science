@@ -125,6 +125,28 @@ class ImageScience
     end
   end
 
+  # call-seq:
+  #   img[x, y] -> index
+  #   img[x, y] -> [red, green, blue]
+  #
+  # alias for get_pixel_color
+
+  def [](x, y)
+    get_pixel_color(x, y)
+  end
+
+  # call-seq:
+  #   img[x, y] = index
+  #   img[x, y] = [red, green, blue]
+  #
+  # alias for set_pixel_color
+
+  def []=(x, y, *args)
+    set_pixel_color(x, y, *args)
+  end
+
+  private
+  
   def self.fif_to_string(fif)
     file_types = %W{BMP ICO JPEG JNG KOALA IFF MNG PBM PBMRAW PCD PCX PGM
                     PGMRAW PNG PPM PPMRAW RAS TARGA TIFF WBMP PSD CUT XBM

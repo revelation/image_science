@@ -1,10 +1,5 @@
 /*
- * Provides a clean and simple API to generate thumbnails using
- * FreeImage as the underlying mechanism.
- *
- * For more information or if you have build issues with FreeImage, see
- * http://seattlerb.rubyforge.org/ImageScience.html
- *
+ * Provides a clean and simple API to FreeImage.
  */
 
 #include "ruby.h"
@@ -311,9 +306,9 @@ static VALUE width(VALUE self) {
 
 /*
  * call-seq:
- *   get_pixel_color(x, y) -> [red, green, blue]
+ *   get_pixel_color(x, y) -> [red, green, blue, alpha]
  *
- * Returns an array representing the color of the given pixel [red,green,blue]
+ * Returns an array representing the color of the given pixel.
  */
 static VALUE get_pixel_color(VALUE self, VALUE xval, VALUE yval) {
   FIBITMAP *bitmap;
@@ -321,13 +316,15 @@ static VALUE get_pixel_color(VALUE self, VALUE xval, VALUE yval) {
   RGBQUAD *pal;
   BYTE rgb_index;
   FREE_IMAGE_COLOR_TYPE ctype;
-  VALUE out_ary = rb_ary_new2(3);
+  VALUE out_ary = rb_ary_new2(4);
   int x = NUM2INT(xval);
   int y = NUM2INT(yval);
   int success = 0;
 
   GET_BITMAP(bitmap);
   ctype = FreeImage_GetColorType(bitmap);
+
+  y = FreeImage_GetHeight(bitmap) - y - 1; /* convert to normal coordinates */
 
   if(ctype == FIC_PALETTE) {
     if(FreeImage_GetPixelIndex(bitmap, x, y, &rgb_index)) {
@@ -338,6 +335,7 @@ static VALUE get_pixel_color(VALUE self, VALUE xval, VALUE yval) {
       }
     }
   } else {
+    memset(&rgb, 0, sizeof(RGBQUAD));
     success = FreeImage_GetPixelColor(bitmap, x, y, &rgb);
   }
 
@@ -345,9 +343,69 @@ static VALUE get_pixel_color(VALUE self, VALUE xval, VALUE yval) {
     rb_ary_store(out_ary, 0, INT2FIX(rgb.rgbRed));
     rb_ary_store(out_ary, 1, INT2FIX(rgb.rgbGreen));
     rb_ary_store(out_ary, 2, INT2FIX(rgb.rgbBlue));
+    rb_ary_store(out_ary, 3, INT2FIX(rgb.rgbReserved));
   }
 
   return out_ary;
+}
+
+/*
+ * call-seq:
+ *   set_pixel_color(x, y, index)
+ *   set_pixel_color(x, y, red, green, blue, alpha = NULL)
+ *   set_pixel_color(x, y, [red, green, blue, alpha])
+ *
+ * Set the pixel color or index (for palettized images).  Parameter
+ * +x+ is the pixel position in horizontal direction, and parameter
+ * +y+ is the pixel position in vertical direction. The method
+ * returns true on success, and returns false otherwise.
+ */
+
+static VALUE set_pixel_color(int argc, VALUE *argv, VALUE self) {
+  FIBITMAP *bitmap;
+  VALUE x, y, set_value, value1;
+  int value_length = 0, yval;
+  FREE_IMAGE_COLOR_TYPE ctype;
+  RGBQUAD rgb;
+  BYTE index_value;
+  BOOL ret = Qfalse;
+
+  GET_BITMAP(bitmap);
+  ctype = FreeImage_GetColorType(bitmap);
+  yval = FreeImage_GetHeight(bitmap); /* to convert to normal coordinates */
+
+  if(ctype == FIC_PALETTE) {
+    /* palettized image */
+    rb_scan_args(argc, argv, "30", &x, &y, &set_value);
+    index_value = FIX2INT(set_value);
+    yval = yval - FIX2INT(y) - 1;
+
+    ret = FreeImage_SetPixelIndex(bitmap, FIX2INT(x), yval, &index_value);
+  }
+  else {
+    rb_scan_args(argc, argv, "2*", &x, &y, &set_value);
+
+    if(!NIL_P(set_value)) {
+      /* if first entry is an array, use that as the colour list */
+      value1 = rb_ary_entry(set_value, 0);
+      if(TYPE(value1) == T_ARRAY) set_value = value1;
+
+      value_length = RARRAY(set_value)->len;
+    }
+
+    if(value_length < 3 || value_length > 4) {
+      rb_raise(rb_eArgError, "wrong number of arguments");
+    }
+
+    rgb.rgbRed   = FIX2INT(rb_ary_entry(set_value, 0));
+    rgb.rgbGreen = FIX2INT(rb_ary_entry(set_value, 1));
+    rgb.rgbBlue  = FIX2INT(rb_ary_entry(set_value, 2));
+    rgb.rgbReserved = (value_length == 4) ? FIX2INT(rb_ary_entry(set_value, 3)) : 0;
+    yval = yval - FIX2INT(y) - 1;
+
+    ret = FreeImage_SetPixelColor(bitmap, FIX2INT(x), yval, &rgb);
+  }
+  return ret;
 }
 
 /*
@@ -648,6 +706,7 @@ void Init_image_science_ext(void)
   rb_define_method(isc, "with_crop", with_crop, 4);
   rb_define_method(isc, "crop", with_crop, 4);
   rb_define_method(isc, "get_pixel_color", get_pixel_color, 2);
+  rb_define_method(isc, "set_pixel_color", set_pixel_color, -1);
   rb_define_method(isc, "colortype", colortype, 0);
   rb_define_method(isc, "depth", depth, 0);
   rb_define_method(isc, "adjust_gamma", adjust_gamma, 1);

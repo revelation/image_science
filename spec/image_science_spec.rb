@@ -1,6 +1,7 @@
 require File.dirname(__FILE__) + '/../lib/image_science'
 
 include ImageScience::ColorChannels
+include ImageScience::ColorTypes
 include ImageScience::ImageFilters
 include ImageScience::ImageFormats
 
@@ -228,16 +229,16 @@ describe ImageScience do
       end
       
       describe "get_pixel_color" do
-        it "should get pixel color" do
-          expected = {
-            :jpg => [[62, 134, 122], [0, 14, 7]],
-            :png => [[62, 134, 121], [1, 2, 2]],
-            :gif => [[59, 135, 119], [0, 2, 0]],
-            :bmp => [[62, 134, 121], [1, 2, 2]],
-            :tif => [[62, 134, 121], [1, 2, 2]],
-            :xpm => [[255, 255, 255], [0, 0, 0]]
-          }
+        expected = {
+          :jpg => [[62, 134, 122, 0],  [0, 14, 7, 0]],
+          :png => [[62, 134, 121, 0],  [1, 2, 2, 0]],
+          :gif => [[59, 135, 119, 0],  [0, 2, 0, 0]],
+          :bmp => [[62, 134, 121, 0],  [1, 2, 2, 0]],
+          :tif => [[62, 134, 121, 0],  [1, 2, 2, 0]],
+          :xpm => [[255, 255, 255, 0], [0, 0, 0, 0]]
+        }
 
+        it "should get pixel color" do
           ImageScience.with_image image_path(ext) do |img|
             rgb = img.get_pixel_color(10,7)
             rgb.should_not be_nil
@@ -246,6 +247,35 @@ describe ImageScience do
             rgb = img.get_pixel_color(24,0)
             rgb.should_not be_nil
             rgb.should == expected[ext.to_sym][1]
+          end
+        end
+
+        it "should get pixel color with []" do
+          ImageScience.with_image image_path(ext) do |img|
+            rgb = img[10,7]
+            rgb.should_not be_nil
+            rgb.should == expected[ext.to_sym][0]
+          
+            rgb = img[24,0]
+            rgb.should_not be_nil
+            rgb.should == expected[ext.to_sym][1]
+          end
+        end
+      end
+
+      describe "set_pixel_color" do
+        it "should set pixel color" do
+          ImageScience.with_image image_path(ext) do |img|
+            if img.colortype == FIC_PALETTE
+              img.set_pixel_color(10, 7, 3).should be_true
+              img[25, 25] = 4
+            else
+              img.set_pixel_color(10,  7, [100, 20, 50]).should be_true
+              img.set_pixel_color(25, 25, 100, 20, 50).should be_true
+              img.set_pixel_color(25, 25, [100, 20, 50, 0]).should be_true
+              img.set_pixel_color(25, 25, 100, 20, 50, 0).should be_true
+              img[25, 25] = [100, 20, 50, 0];
+            end
           end
         end
       end

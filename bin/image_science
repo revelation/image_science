@@ -37,6 +37,7 @@
 # * resize <width> <height>
 # * crop <left> <top> <right> <bottom>
 # * get_pixel_color <x> <y>
+# * set_pixel_color <x> <y> <red> <green> <blue> [<alpha>]
 # * adjust_gamma <value>      
 # * adjust_brightness <value>
 # * adjust_contrast <value>  
@@ -179,6 +180,9 @@ EOM
   when 'get_pixel_color'
     x, y = expect_params(%W{<x> <y>})
     process_data(opts) { |i| warn i.get_pixel_color(x, y).inspect }
+  when 'set_pixel_color'
+    x, y, *rgb = expect_params(%W{<x> <y> <red> <green> <blue>}, %W{<alpha>})
+    process_data(opts) { |i| i.set_pixel_color(x, y, rgb); @changed = true }
   when /^adjust_/
     value = expect_params("<value>")
     process_data(opts) { |i| i.send(@command, value); @changed = true }
