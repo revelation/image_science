@@ -23,26 +23,35 @@ VALUE isc_color_chan;    /* ImageScience::ColorChannels module */
 VALUE isc_color_types;   /* ImageScience::ColorTypes module */
 VALUE isc_ls_flags;      /* ImageScience::LoadSaveFlags module */
 
-static VALUE unload(VALUE self) {
-  FIBITMAP *bitmap;
-  GET_BITMAP(bitmap);
-
+static VALUE unload(FIBITMAP *bitmap) {
   FreeImage_Unload(bitmap);
-  DATA_PTR(self) = NULL;
   return Qnil;
+}
+
+static VALUE isc_alloc(VALUE klass)
+{
+  VALUE obj = Data_Wrap_Struct(klass, NULL, unload, NULL);
+  DATA_PTR(obj) = NULL;
+  return obj;
+}
+
+static FREE_IMAGE_FORMAT get_fif(VALUE self) {
+  return FIX2INT(rb_iv_get(self, "@file_type"));
 }
 
 static VALUE wrap_and_yield(FIBITMAP *image, VALUE self, FREE_IMAGE_FORMAT fif) {
   unsigned int self_is_class = rb_type(self) == T_CLASS;
-  VALUE klass = self_is_class ? self         : CLASS_OF(self);
-  VALUE type  = self_is_class ? INT2FIX(fif) : rb_iv_get(self, "@file_type");
-  VALUE obj = Data_Wrap_Struct(klass, NULL, NULL, image);
-  rb_iv_set(obj, "@file_type", type);
-  return rb_ensure(rb_yield, obj, unload, obj);
+  VALUE klass = self_is_class ? self : CLASS_OF(self);
+  VALUE obj = isc_alloc(klass);
+
+  if(!self_is_class) fif = get_fif(self);
+
+  DATA_PTR(obj) = image;
+  rb_iv_set(obj, "@file_type", INT2FIX(fif));
+  return rb_yield(obj);
 }
 
-static void copy_icc_profile(VALUE self, FIBITMAP *from, FIBITMAP *to) {
-  FREE_IMAGE_FORMAT fif = FIX2INT(rb_iv_get(self, "@file_type"));
+static void copy_icc_profile(FIBITMAP *from, FIBITMAP *to, FREE_IMAGE_FORMAT fif) {
   if (fif != FIF_PNG && FreeImage_FIFSupportsICCProfiles(fif)) {
     FIICCPROFILE *profile = FreeImage_GetICCProfile(from);
     if (profile && profile->data) {
@@ -69,7 +78,7 @@ _prepare_bitmap_for_save(FIBITMAP *bitmap, FREE_IMAGE_FORMAT fif)
 {
   FIBITMAP *new_bitmap = NULL;
 
-  if (fif == FIF_PNG) FreeImage_DestroyICCProfile(bitmap);
+  // if (fif == FIF_PNG) FreeImage_DestroyICCProfile(bitmap);
 
   if (fif == FIF_JPEG && FreeImage_GetBPP(bitmap) != 24) {
     new_bitmap = FreeImage_ConvertTo24Bits(bitmap);
@@ -78,36 +87,57 @@ _prepare_bitmap_for_save(FIBITMAP *bitmap, FREE_IMAGE_FORMAT fif)
     new_bitmap = FreeImage_ConvertTo8Bits(bitmap);
   }
 
+  if (new_bitmap) copy_icc_profile(bitmap, new_bitmap, fif);
+
   return new_bitmap;
 }
 
-/****** Class methods ******/
-
-/*
- * call-seq:
- *   with_image(filename) { |img| ... }
- *
- * The top-level image loader opens +filename+ and then yields the image.
- */
-static VALUE with_image(VALUE klass, VALUE filename) {
+/* called by isc_init, with_image, with_image_from_memory */
+static VALUE isc_init2(VALUE self, VALUE image, VALUE flags_arg, int is_file)
+{
+  char *img;
   FREE_IMAGE_FORMAT fif = FIF_UNKNOWN;
-  int flags;
-  char *input = RSTRING(filename)->ptr;
-  struct stat buf;
+  DWORD image_data_length;
+  FIMEMORY *stream;
   FIBITMAP *bitmap, *new_bitmap;
-  VALUE result = Qnil;
+  int flags, flags_given;
 
-  if (stat(input, &buf)) rb_raise(rb_eTypeError, "file not found");
+  flags = NIL_P(flags_arg) ? 0 : FIX2INT(flags_arg);
+  flags_given = !NIL_P(flags_arg);
 
-  fif = FreeImage_GetFileType(input, 0);
-  if (fif == FIF_UNKNOWN) fif = FreeImage_GetFIFFromFilename(input);
-  if ((fif == FIF_UNKNOWN) || !FreeImage_FIFSupportsReading(fif)) {
-    rb_raise(rb_eTypeError, "Unknown file format");
+  Check_Type(image, T_STRING);
+  img = RSTRING(image)->ptr;
+
+  if (is_file) {
+    /* argument is a file */
+
+    fif = FreeImage_GetFileType(img, 0);
+    if (fif == FIF_UNKNOWN) fif = FreeImage_GetFIFFromFilename(img);
+    if ((fif == FIF_UNKNOWN) || !FreeImage_FIFSupportsReading(fif)) {
+      rb_raise(rb_eTypeError, "Unknown file format");
+    }
+
+    if(!flags_given && fif == FIF_JPEG) flags = JPEG_ACCURATE;
+
+    bitmap = FreeImage_Load(fif, img, flags);
+  }
+  else {
+    /* attempt to read argument as image data */
+    image_data_length = RSTRING(image)->len;
+    stream = FreeImage_OpenMemory((BYTE *)img, image_data_length);
+
+    fif = FreeImage_GetFileTypeFromMemory(stream, 0);
+    if ((fif == FIF_UNKNOWN) || !FreeImage_FIFSupportsReading(fif)) {
+      rb_raise(rb_eTypeError, "Unknown file format");
+    }
+
+    if(!flags_given && fif == FIF_JPEG) flags = JPEG_ACCURATE;
+
+    bitmap = FreeImage_LoadFromMemory(fif, stream, flags);
+    FreeImage_CloseMemory(stream);
   }
 
-  flags = fif == FIF_JPEG ? JPEG_ACCURATE : 0;
-  bitmap = FreeImage_Load(fif, input, flags);
-
+  /* rotate bitmap according to Orientation EXIF tag */
   if (bitmap) {
     FITAG *tagValue = NULL;
     double angle = 0;
@@ -128,10 +158,26 @@ static VALUE with_image(VALUE klass, VALUE filename) {
       FreeImage_Unload(bitmap);
       bitmap = new_bitmap;
     }
-    
-    result = wrap_and_yield(bitmap, klass, fif);
   }
-  return result;
+
+  DATA_PTR(self) = bitmap;
+  rb_iv_set(self, "@file_type", INT2FIX(fif));
+
+  return self;
+}
+
+/****** Class methods ******/
+
+/*
+ * call-seq:
+ *   with_image(filename) { |img| ... }
+ *
+ * The top-level image loader opens +filename+ and then yields the image.
+ */
+static VALUE with_image(VALUE klass, VALUE filename) {
+  VALUE self = isc_alloc(isc);
+  isc_init2(self, filename, Qnil, 1);
+  return rb_yield(self);
 }
 
 /*
@@ -142,31 +188,9 @@ static VALUE with_image(VALUE klass, VALUE filename) {
  * and then yields the image.
  */
 static VALUE with_image_from_memory(VALUE klass, VALUE image_data) {
-  FREE_IMAGE_FORMAT fif = FIF_UNKNOWN;
-
-  Check_Type(image_data, T_STRING);
-  BYTE *image_data_ptr    = (BYTE*)RSTRING_PTR(image_data);
-  DWORD image_data_length = RSTRING_LEN(image_data);
-  FIMEMORY *stream = FreeImage_OpenMemory(image_data_ptr, image_data_length);
-
-  if (NULL == stream) {
-    rb_raise(rb_eTypeError, "Unable to open image_data");
-  }
-
-  fif = FreeImage_GetFileTypeFromMemory(stream, 0);
-  if ((fif == FIF_UNKNOWN) || !FreeImage_FIFSupportsReading(fif)) {
-    rb_raise(rb_eTypeError, "Unknown file format");
-  }
-
-  FIBITMAP *bitmap = NULL;
-  VALUE result = Qnil;
-  int flags = fif == FIF_JPEG ? JPEG_ACCURATE : 0;
-  bitmap = FreeImage_LoadFromMemory(fif, stream, flags);
-  FreeImage_CloseMemory(stream);
-  if (bitmap) {
-    result = wrap_and_yield(bitmap, klass, fif);
-  }
-  return result;
+  VALUE self = isc_alloc(isc);
+  isc_init2(self, image_data, Qnil, 0);
+  return rb_yield(self);
 }
 
 /*
@@ -267,17 +291,18 @@ static VALUE buffer(int argc, VALUE *argv, VALUE self) {
 static VALUE with_crop(VALUE self, VALUE lv, VALUE tv, VALUE rv, VALUE bv) {
   FIBITMAP *copy, *bitmap;
   VALUE result = Qnil;
+
   GET_BITMAP(bitmap);
 
   copy = FreeImage_Copy(bitmap, NUM2INT(lv), NUM2INT(tv),
 			NUM2INT(rv), NUM2INT(bv));
   if (copy) {
-    copy_icc_profile(self, bitmap, copy);
+    copy_icc_profile(bitmap, copy, get_fif(self));
     if(rb_block_given_p()) {
       result = wrap_and_yield(copy, self, 0);
     } else {
       result = Qtrue;
-      unload(self);
+      FreeImage_Unload(bitmap);
       DATA_PTR(self) = copy;
     }
   }
@@ -290,8 +315,7 @@ static VALUE with_crop(VALUE self, VALUE lv, VALUE tv, VALUE rv, VALUE bv) {
 static VALUE height(VALUE self) {
   FIBITMAP *bitmap;
   GET_BITMAP(bitmap);
-  int height = FreeImage_GetHeight(bitmap);
-  return INT2FIX(height);
+  return INT2FIX(FreeImage_GetHeight(bitmap));
 }
 
 /*
@@ -300,8 +324,7 @@ static VALUE height(VALUE self) {
 static VALUE width(VALUE self) {
   FIBITMAP *bitmap;
   GET_BITMAP(bitmap);
-  int width = FreeImage_GetWidth(bitmap);
-  return INT2FIX(width);
+  return INT2FIX(FreeImage_GetWidth(bitmap));
 }
 
 /*
@@ -437,11 +460,11 @@ static VALUE resize(int argc, VALUE *argv, VALUE self) {
   image = FreeImage_Rescale(bitmap, w, h, fi_filter);
 
   if (image) {
-    copy_icc_profile(self, bitmap, image);
+    copy_icc_profile(bitmap, image, get_fif(self));
     if(rb_block_given_p()) {
       return wrap_and_yield(image, self, 0);
     } else {
-      unload(self);
+      FreeImage_Unload(bitmap);
       DATA_PTR(self) = image;
     }
   }
@@ -644,20 +667,25 @@ static VALUE flip_vertical(VALUE self) {
  *
  */
 static VALUE rotate(int argc, VALUE *argv, VALUE self) {
-  FIBITMAP *bitmap, *new_bitmap;
+  FIBITMAP *bitmap;
+  FIBITMAP *new_bitmap = NULL;
   VALUE angle, x_shift, y_shift, x_origin, y_origin, use_mask;
   BOOL mask;
+  FREE_IMAGE_FORMAT fif;
 
   rb_scan_args(argc, argv, "15", &angle, &x_shift, &y_shift,
 	       &x_origin, &y_origin, &use_mask);
 
   GET_BITMAP(bitmap);
+  fif = get_fif(self);
 
   if(FreeImage_GetBPP(bitmap) == 16) {
     /* can't rotate 16 bit images - convert to 24 bit */
     new_bitmap = FreeImage_ConvertTo24Bits(bitmap);
-    unload(self);
+    copy_icc_profile(bitmap, new_bitmap, fif);
+    FreeImage_Unload(bitmap);
     DATA_PTR(self) = bitmap = new_bitmap;
+    new_bitmap = NULL;
   }
 
   if (argc == 1) {
@@ -676,18 +704,44 @@ static VALUE rotate(int argc, VALUE *argv, VALUE self) {
   }
   if (!new_bitmap) return Qfalse;
 
-  /* TODO: convert back to 16 bit? */
+  copy_icc_profile(bitmap, new_bitmap, fif);
 
   if (rb_block_given_p()) {
     return wrap_and_yield(new_bitmap, self, 0);
   } else {
-    unload(self);
+    FreeImage_Unload(bitmap);
     DATA_PTR(self) = new_bitmap;
     return Qtrue;
   }
 }
 
-/* -- initialiser ---- */
+/*
+ * call-seq:
+ *   ImageScience.new(filename, flags = 0)
+ *   ImageScience.new(image_data, flags = 0)
+ *
+ * Returns a new ImageScience object.  The optional +flags+ argument are
+ * flags to send to the loader plugin (see ImageScience::LoadSaveFlags).
+ * If flags are not specified, the JPEG_ACCURATE flag will be
+ * enabled by default for JPEG files.
+ */
+
+static VALUE isc_init(int argc, VALUE *argv, VALUE self)
+{
+  VALUE image, flags_arg;
+  struct stat buf;
+  int is_file;
+  char *img;
+
+  rb_scan_args(argc, argv, "11", &image, &flags_arg);
+  Check_Type(image, T_STRING);
+  img = RSTRING(image)->ptr;
+  is_file = !stat(img, &buf);
+
+  return isc_init2(self, image, flags_arg, is_file);
+}
+
+/* -- extension initialiser ---- */
 
 void Init_image_science_ext(void)
 {
@@ -698,7 +752,9 @@ void Init_image_science_ext(void)
   rb_define_singleton_method(isc, "get_version", get_version, 0);
   rb_define_singleton_method(isc, "file_type", file_type, 1);
 
-  //rb_define_method(isc, "initialize", t_init, 0);
+  rb_define_alloc_func(isc, isc_alloc);
+
+  rb_define_method(isc, "initialize", isc_init, -1);
   rb_define_method(isc, "width", width, 0);
   rb_define_method(isc, "height", height, 0);
   rb_define_method(isc, "resize", resize, -1);

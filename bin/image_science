@@ -52,6 +52,9 @@
 #
 # = Examples
 #
+#  # convert an image from one format to another
+#  > image_science -i pix.jpg -o pix.gif
+#
 #  # create a thumbnail of size 100 pixels from pix.jpg, writes to 'output':
 #  > image_science thumbnail 100 pix.jpg
 #

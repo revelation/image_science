@@ -1,11 +1,16 @@
-== WIP
+== 1.1.2 / 2010-02-12
 
 * added bin/image_science script.
-* added data() method to get image data as a string.
+* added buffer() method to get image data as a string.
 * crop(), with_crop(), resize(), thumbnail(), cropped_thumbnail() can now all be called without providing a block (modifies the image in-place).
 * resize() now accepts optional filter (see FreeImage::ImageFilters).
 * image_type() can now be called as an instance method.
-* added bmp and tiff files to test suite.
+* added bmp, tiff, xpm files to test suite.
+* added support for ImageScience.new (takes filename or data)
+* added flip_horizontal, flip_vertical, rotate methods
+* added support for load/save flags to new() and buffer().
+* added set_pixel_color method
+* added fit_within method
 
 == 1.1.1 / 2010-02-06
 

@@ -30,6 +30,21 @@ describe ImageScience do
 
     describe "#{ext}" do
 
+      describe "new" do
+        it "should create a new ImageScience object by reading a file" do
+          img = ImageScience.new(image_path(ext))
+          img.should be_kind_of(ImageScience)
+          [img.width, img.height].should == [@w, @h]
+        end
+
+        it "should create a new ImageScience object by reading image data" do
+          data = File.read(image_path(ext))
+          img = ImageScience.new(data)
+          img.should be_kind_of(ImageScience)
+          [img.width, img.height].should == [@w, @h]
+        end
+      end
+
       describe "with_image" do
         it "should raise an error when a file does not exist" do
           lambda {
@@ -97,7 +112,7 @@ describe ImageScience do
             img.width.should == 25
           end
         end
-      
+
         it "should resize an image given floating point dimensions" do
           ImageScience.with_image image_path(ext) do |img|
             img.resize(25.2, 25.7) do |thumb|
@@ -227,7 +242,7 @@ describe ImageScience do
         end
 
       end
-      
+
       describe "get_pixel_color" do
         expected = {
           :jpg => [[62, 134, 122, 0],  [0, 14, 7, 0]],
