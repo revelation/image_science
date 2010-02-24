@@ -10,7 +10,7 @@
 #define RB_BOOL(value) (value ? Qtrue : Qfalse)
 
 #ifdef HAVE_FREEIMAGE_ROTATE
-#define ROTATE(bitmap, angle) FreeImage_Rotate(bitmap, angle)
+#define ROTATE(bitmap, angle) FreeImage_Rotate(bitmap, angle, NULL)
 #else
 #define ROTATE(bitmap, angle) FreeImage_RotateClassic(bitmap, angle)
 #endif
