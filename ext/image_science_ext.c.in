@@ -84,12 +84,11 @@ _prepare_bitmap_for_save(FIBITMAP *bitmap, FREE_IMAGE_FORMAT fif)
     new_bitmap = FreeImage_ConvertTo24Bits(bitmap);
   }
   if (fif == FIF_GIF && FreeImage_GetBPP(bitmap) != 8) {
-		if (FreeImage_GetBPP(bitmap) != 24) {
-	    new_bitmap = FreeImage_ColorQuantize(FreeImage_ConvertTo24Bits(bitmap), FIQ_WUQUANT);
-		} else {
-			new_bitmap = FreeImage_ColorQuantize(bitmap, FIQ_WUQUANT);
-		}
-		 
+    if (FreeImage_GetBPP(bitmap) != 24) {
+      new_bitmap = FreeImage_ColorQuantize(FreeImage_ConvertTo24Bits(bitmap), FIQ_WUQUANT);
+    } else {
+      new_bitmap = FreeImage_ColorQuantize(bitmap, FIQ_WUQUANT);
+    }
   }
 
   if (new_bitmap) copy_icc_profile(bitmap, new_bitmap, fif);
