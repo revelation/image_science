@@ -29,12 +29,13 @@
 #
 # == Commands
 #
-# The following commands are recognised
+# The following commands are recognised:
 # 
 # * info
 # * histogram
 # * get_version
 # * resize <width> <height>
+# * fit_within <max_width> <max_height>
 # * crop <left> <top> <right> <bottom>
 # * get_pixel_color <x> <y>
 # * set_pixel_color <x> <y> <red> <green> <blue> [<alpha>]
@@ -125,9 +126,18 @@ def usage(bonus_args = nil)
   cmd = @command || "[command]"
   usage = ["usage: image_science [OPTIONS]", cmd, bonus_args, "[image_file]"].
     compact.join(" ")
-  
+
+  usage += "\n\n"
+  usage += <<EOM
+ options:
+  -h: display this help message
+  -i: input file  (by default read from stdin, or last argument)
+  -o: output file (by default write to stdout, or a file named 'output')
+  -d: debug mode
+EOM
+
   if !@command
-    re = Regexp.new('== Commands(.*?)= Examples', Regexp::MULTILINE)
+    re = Regexp.new('== Commands\n(.*?)= Examples', Regexp::MULTILINE)
     commands = $1.gsub(/#/, '') if File.read(__FILE__).match(re)
     usage += commands.sub(/[\n\s]+\z/, '') + "\n\n"
   end
@@ -179,6 +189,9 @@ EOM
     warn "FreeImage #{ImageScience.get_version}"
   when 'resize'
     w, h = expect_params(%W{<width> <height>})
+    process_data(opts) { |i| i.send(@command, w, h); @changed = true }
+  when 'fit_within'
+    w, h = expect_params(%W{<max_width> <max_height>})
     process_data(opts) { |i| i.send(@command, w, h); @changed = true }
   when 'get_pixel_color'
     x, y = expect_params(%W{<x> <y>})
