@@ -110,7 +110,7 @@ static VALUE isc_init2(VALUE self, VALUE image, VALUE flags_arg, int is_file)
   flags_given = !NIL_P(flags_arg);
 
   Check_Type(image, T_STRING);
-  img = RSTRING(image)->ptr;
+  img = RSTRING_PTR(image);
 
   if (is_file) {
     /* argument is a file */
@@ -127,7 +127,7 @@ static VALUE isc_init2(VALUE self, VALUE image, VALUE flags_arg, int is_file)
   }
   else {
     /* attempt to read argument as image data */
-    image_data_length = RSTRING(image)->len;
+    image_data_length = RSTRING_LEN(image);
     stream = FreeImage_OpenMemory((BYTE *)img, image_data_length);
 
     fif = FreeImage_GetFileTypeFromMemory(stream, 0);
@@ -212,7 +212,7 @@ static VALUE get_version(VALUE self) {
  * currently not used and can be set to 0.
  */
 static VALUE file_type(VALUE self, VALUE filename) {
-  char * input = RSTRING(filename)->ptr;
+  char * input = RSTRING_PTR(filename);
   FREE_IMAGE_FORMAT fif = FIF_UNKNOWN; 
 
   fif = FreeImage_GetFileType(input, 0); 
@@ -255,7 +255,7 @@ static VALUE buffer(int argc, VALUE *argv, VALUE self) {
 
   if ((fif == FIF_UNKNOWN) || !FreeImage_FIFSupportsWriting(fif)) {
     snprintf(message, 1023, "Unknown file format: %d", fif);
-    rb_raise(rb_eTypeError, message);
+    rb_raise(rb_eTypeError, "%s", message);
   }
 
   GET_BITMAP(bitmap);
@@ -417,7 +417,7 @@ static VALUE set_pixel_color(int argc, VALUE *argv, VALUE self) {
       value1 = rb_ary_entry(set_value, 0);
       if(TYPE(value1) == T_ARRAY) set_value = value1;
 
-      value_length = RARRAY(set_value)->len;
+      value_length = RARRAY_LEN(set_value);
     }
 
     if(value_length < 3 || value_length > 4) {
@@ -484,7 +484,7 @@ static VALUE resize(int argc, VALUE *argv, VALUE self) {
  */
 static VALUE save(VALUE self, VALUE filename) {
   int flags;
-  char * output = RSTRING(filename)->ptr;
+  char * output = RSTRING_PTR(filename);
   FIBITMAP *bitmap, *new_bitmap;
   FREE_IMAGE_FORMAT fif = FreeImage_GetFIFFromFilename(output);
   if (fif == FIF_UNKNOWN) fif = FIX2INT(rb_iv_get(self, "@file_type"));
@@ -739,7 +739,7 @@ static VALUE isc_init(int argc, VALUE *argv, VALUE self)
 
   rb_scan_args(argc, argv, "11", &image, &flags_arg);
   Check_Type(image, T_STRING);
-  img = RSTRING(image)->ptr;
+  img = RSTRING_PTR(image);
   is_file = !stat(img, &buf);
 
   return isc_init2(self, image, flags_arg, is_file);

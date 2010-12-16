@@ -29,7 +29,7 @@ def expand_constants
     constants[$1] << [name]
   end
 
-  raw_headers = headers.collect { |i| File.read(i) }.join
+  raw_headers = headers.collect { |i| File.read(i, :encoding => "ISO-8859-1") }.join
   
   # add #defined constants (load/save flags)
   constants['FLAG'] ||= []
