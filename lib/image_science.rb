@@ -2,7 +2,7 @@ require File.dirname(__FILE__) + '/../ext/image_science_ext'
 
 class ImageScience
 
-  VERSION = "1.1.4"
+  VERSION = "1.1.5"
 
   ##
   # Returns the type of the image as a string.
