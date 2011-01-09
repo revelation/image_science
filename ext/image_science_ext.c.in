@@ -719,6 +719,71 @@ static VALUE rotate(int argc, VALUE *argv, VALUE self) {
   }
 }
 
+// dpi methods from tcaddy
+
+/*
+ * Returns to dots-per-meter of x-axis (width) of image
+ */
+static VALUE dpm_x(VALUE self) {
+  FIBITMAP *bitmap;
+  GET_BITMAP(bitmap);
+
+  int dpm_x = FreeImage_GetDotsPerMeterX(bitmap);
+  return INT2FIX(FreeImage_GetDotsPerMeterX(bitmap));
+}
+
+/*
+ * Returns to dots-per-meter of y-axis (height) of image
+ */
+static VALUE dpm_y(VALUE self) {
+  FIBITMAP *bitmap;
+  GET_BITMAP(bitmap);
+
+  return INT2FIX(FreeImage_GetDotsPerMeterY(bitmap));
+}
+
+/*
+ * call-seq:
+ *   resize_with_dpm(width, height, dpm_x, dpm_y)
+ * 
+ * Resizes the image to +width+ and +height+ using a cubic-bspline
+ * filter, and converts to Dots-per-Meter.
+ * If a block is given, yields the new image, else returns
+ * true on success.
+ */
+static VALUE resize_with_dpm(VALUE self, VALUE wv, VALUE hv, VALUE dpm_xv, VALUE dpm_yv) {
+  int w, h, dpm_x, dpm_y;
+  FIBITMAP *bitmap, *image;
+  FREE_IMAGE_FORMAT fif;
+
+  w = FIX2INT(wv);
+  h = FIX2INT(hv);
+  dpm_x = FIX2INT(dpm_xv);
+  dpm_y = FIX2INT(dpm_yv);
+
+  if (w <= 0) rb_raise(rb_eArgError, "Width <= 0");
+  if (h <= 0) rb_raise(rb_eArgError, "Height <= 0");
+  if (dpm_x <= 0) rb_raise(rb_eArgError, "Dots-per-Meter X-Axis <= 0");
+  if (dpm_y <= 0) rb_raise(rb_eArgError, "Dots-per-Meter Y-Axis <= 0");
+
+  GET_BITMAP(bitmap);
+  fif = get_fif(self);
+  image = FreeImage_Rescale(bitmap, w, h, FILTER_CATMULLROM);
+  FreeImage_SetDotsPerMeterX(image, dpm_x);
+  FreeImage_SetDotsPerMeterY(image, dpm_y);
+  if (image) {
+    copy_icc_profile(bitmap, image, fif);
+
+    if(rb_block_given_p()) {
+      return wrap_and_yield(image, self, 0);
+    } else {
+      FreeImage_Unload(bitmap);
+      DATA_PTR(self) = image;
+    }
+  }
+  return image ? Qtrue : Qfalse;
+}
+
 /*
  * call-seq:
  *   ImageScience.new(filename, flags = 0)
@@ -778,6 +843,9 @@ void Init_image_science_ext(void)
   rb_define_method(isc, "flip_horizontal", flip_horizontal, 0);
   rb_define_method(isc, "flip_vertical", flip_vertical, 0);
   rb_define_method(isc, "rotate", rotate, -1);
+  rb_define_method(isc, "dpm_x", dpm_x, 0);
+  rb_define_method(isc, "dpm_y", dpm_x, 0);
+  rb_define_method(isc, "resize_with_dpm", resize_with_dpm, 4);
 
   /* FREE_IMAGE_TYPE constants */
   isc_image_types = rb_define_module_under(isc, "ImageTypes");

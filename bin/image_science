@@ -48,6 +48,12 @@
 # * flip_vertical
 # * flip_horizontal
 # * rotate <angle> [<x_shift> <y_shift> <x_origin> <y_origin> <use_mask>]
+# * dpi
+# * dpi_x
+# * dpi_y
+# * dpm_x
+# * dpm_y
+# * resize_with_dpm <width> <height> <dpm_x> <dpm_y>
 #
 # Refer to the ImageScience documentation for allowed value ranges.
 #
@@ -68,8 +74,9 @@
 #  # display effects of gamma adjustments on pixel color (writes to 'output'):
 #  > image_science get_pixel_color 0 0 pix.jpg | image_science adjust_gamma 0.5 | image_science get_pixel_color 0 0
 
+$:.unshift(File.dirname(__FILE__) + '/../lib')
 require 'rubygems'
-require File.dirname(__FILE__) + '/../lib/image_science'
+require 'image_science'
 require 'getoptlong'
 
 ARG_SPEC = [ [ '--help', '-h', GetoptLong::NO_ARGUMENT ],
@@ -210,6 +217,11 @@ EOM
   when 'crop'
     l, r, t, b = expect_params(%W{<left> <top> <right> <bottom>})
     process_data(opts) { |i| i.crop(l, r, t, b); @changed = true }
+  when 'dpi_x', 'dpi_y', 'dpm_x', 'dpm_y', 'dpi'
+    process_data(opts) { |i| warn i.send(@command) }
+  when 'resize_with_dpm'
+    w, h, x, y = expect_params(%W{<width> <height> <dpm_x> <dpm_y>})
+    process_data(opts) { |i| i.resize_with_dpm(w, h, x, y); @changed = true }
   when 'rotate'
     a, *args = expect_params("<angle>", %W{<x_shift> <y_shift> <x_origin>
                                            <y_origin> <use_mask>})
