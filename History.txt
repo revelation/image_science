@@ -1,3 +1,12 @@
+== 1.1.6 / 2011-01-10
+
+* merged in dpi code from tcaddy (https://github.com/tcaddy/image_science)
+** dpm_to_dpi, dpi_to_dpm, dpi_x, dpi_y, dpi, resize_with_dpm, dpm_x, dpm_y
+
+== 1.1.5 / 2010-12-16
+
+* fixes for ruby 1.9
+
 == 1.1.4 / 2010-09-15
 
 * added 'fit_within' command to bin/image_science.
