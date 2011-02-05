@@ -245,7 +245,7 @@ describe ImageScience do
 
       describe "get_pixel_color" do
         expected = {
-          :jpg => [[62, 134, 122, 0],  [0, 14, 7, 0]],
+          :jpg => [[62, 134, 122, 0],  [0, 11, 6, 0]],
           :png => [[62, 134, 121, 0],  [1, 2, 2, 0]],
           :gif => [[59, 135, 119, 0],  [0, 2, 0, 0]],
           :bmp => [[62, 134, 121, 0],  [1, 2, 2, 0]],
@@ -508,6 +508,34 @@ describe ImageScience do
         it "should flip the image vertically" do
           ImageScience.with_image image_path(ext) do |img|          
             img.flip_vertical.should be_true
+          end
+        end
+      end
+
+      # dpi methods (from tcaddy)
+
+      describe "dpm_x" do        
+        it "should return the dpm on the x axis" do
+          ImageScience.with_image image_path(ext) do |img|
+            img.dpi_x.should == 72.009
+          end
+        end
+      end
+
+      describe "dpm_y" do
+        it "should return the dpm on the y axis" do
+          ImageScience.with_image image_path(ext) do |img|
+            img.dpi_y.should == 72.009
+          end
+        end
+      end
+
+      describe "resize_with_dpm" do
+        it "should resize the image to the specified dpm" do
+          ImageScience.with_image image_path(ext) do |img|
+            img.resize_with_dpm(30, 30, 100, 100).should be_true
+            img.dpm_x.should == 100
+            img.dpm_y.should == 100
           end
         end
       end

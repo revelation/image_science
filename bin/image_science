@@ -29,12 +29,13 @@
 #
 # == Commands
 #
-# The following commands are recognised
+# The following commands are recognised:
 # 
 # * info
 # * histogram
 # * get_version
 # * resize <width> <height>
+# * fit_within <max_width> <max_height>
 # * crop <left> <top> <right> <bottom>
 # * get_pixel_color <x> <y>
 # * set_pixel_color <x> <y> <red> <green> <blue> [<alpha>]
@@ -47,6 +48,12 @@
 # * flip_vertical
 # * flip_horizontal
 # * rotate <angle> [<x_shift> <y_shift> <x_origin> <y_origin> <use_mask>]
+# * dpi
+# * dpi_x
+# * dpi_y
+# * dpm_x
+# * dpm_y
+# * resize_with_dpm <width> <height> <dpm_x> <dpm_y>
 #
 # Refer to the ImageScience documentation for allowed value ranges.
 #
@@ -67,8 +74,9 @@
 #  # display effects of gamma adjustments on pixel color (writes to 'output'):
 #  > image_science get_pixel_color 0 0 pix.jpg | image_science adjust_gamma 0.5 | image_science get_pixel_color 0 0
 
+$:.unshift(File.dirname(__FILE__) + '/../lib')
 require 'rubygems'
-require File.dirname(__FILE__) + '/../lib/image_science'
+require 'image_science'
 require 'getoptlong'
 
 ARG_SPEC = [ [ '--help', '-h', GetoptLong::NO_ARGUMENT ],
@@ -125,9 +133,18 @@ def usage(bonus_args = nil)
   cmd = @command || "[command]"
   usage = ["usage: image_science [OPTIONS]", cmd, bonus_args, "[image_file]"].
     compact.join(" ")
-  
+
+  usage += "\n\n"
+  usage += <<EOM
+ options:
+  -h: display this help message
+  -i: input file  (by default read from stdin, or last argument)
+  -o: output file (by default write to stdout, or a file named 'output')
+  -d: debug mode
+EOM
+
   if !@command
-    re = Regexp.new('== Commands(.*?)= Examples', Regexp::MULTILINE)
+    re = Regexp.new('== Commands\n(.*?)= Examples', Regexp::MULTILINE)
     commands = $1.gsub(/#/, '') if File.read(__FILE__).match(re)
     usage += commands.sub(/[\n\s]+\z/, '') + "\n\n"
   end
@@ -180,6 +197,9 @@ EOM
   when 'resize'
     w, h = expect_params(%W{<width> <height>})
     process_data(opts) { |i| i.send(@command, w, h); @changed = true }
+  when 'fit_within'
+    w, h = expect_params(%W{<max_width> <max_height>})
+    process_data(opts) { |i| i.send(@command, w, h); @changed = true }
   when 'get_pixel_color'
     x, y = expect_params(%W{<x> <y>})
     process_data(opts) { |i| warn i.get_pixel_color(x, y).inspect }
@@ -197,6 +217,11 @@ EOM
   when 'crop'
     l, r, t, b = expect_params(%W{<left> <top> <right> <bottom>})
     process_data(opts) { |i| i.crop(l, r, t, b); @changed = true }
+  when 'dpi_x', 'dpi_y', 'dpm_x', 'dpm_y', 'dpi'
+    process_data(opts) { |i| warn i.send(@command) }
+  when 'resize_with_dpm'
+    w, h, x, y = expect_params(%W{<width> <height> <dpm_x> <dpm_y>})
+    process_data(opts) { |i| i.resize_with_dpm(w, h, x, y); @changed = true }
   when 'rotate'
     a, *args = expect_params("<angle>", %W{<x_shift> <y_shift> <x_origin>
                                            <y_origin> <use_mask>})

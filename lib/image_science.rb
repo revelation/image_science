@@ -2,7 +2,7 @@ require File.dirname(__FILE__) + '/../ext/image_science_ext'
 
 class ImageScience
 
-  VERSION = "1.1.3"
+  VERSION = "1.1.6"
 
   ##
   # Returns the type of the image as a string.
@@ -145,6 +145,37 @@ class ImageScience
     set_pixel_color(x, y, *args)
   end
 
+  # methods from tcaddy (https://github.com/tcaddy/image_science) :nodoc:
+
+  # Convert a number from dots-per-meter to dots-per-inch
+  def self.dpm_to_dpi(dpm)
+    (dpm.to_f * (1.to_f/100.to_f) * ((2.54).to_f/1.to_f)).to_f
+  end
+  
+  ##
+  # Convert a number from dots-per-inch to dots-per-meter  
+  def self.dpi_to_dpm(dpi)
+    (dpi.to_f * (1.to_f/(2.54).to_f) * (100.to_f/1.to_f)).to_f
+  end
+  
+  ##
+  # Returns the DPI of x-axis (width) of the image, in dots-per-inch as float
+  def dpi_x
+    self.class.dpm_to_dpi(dpm_x)
+  end
+  
+  ##
+  # Returns the DPI of y-axis (height) of the image, in dots-per-inch as float
+  def dpi_y
+    self.class.dpm_to_dpi(dpm_y)
+  end
+  
+  ##
+  # Returns the DPI of image, as hash of float values
+  def dpi
+    {:x=>dpi_x,:y=>dpi_y}
+  end
+  
   private
   
   def self.fif_to_string(fif)
