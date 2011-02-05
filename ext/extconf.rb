@@ -29,7 +29,11 @@ def expand_constants
     constants[$1] << [name]
   end
 
-  raw_headers = headers.collect { |i| File.read(i, :encoding => "ISO-8859-1") }.join
+  if RUBY_VERSION >= "1.9"
+    raw_headers = headers.collect { |i| File.read(i, :encoding => "ISO-8859-1") }.join
+  else
+    raw_headers = headers.collect { |i| File.read(i) }.join
+  end
   
   # add #defined constants (load/save flags)
   constants['FLAG'] ||= []
@@ -73,7 +77,7 @@ def expand_constants
 
 end
 
-dir_config('freeimage')
+dir_config('freeimage', %W{/opt/local /usr/local /usr})
 
 ok = have_header('FreeImage.h') &&
   have_library('stdc++') && # sometimes required on OSX
